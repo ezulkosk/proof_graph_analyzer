@@ -10,6 +10,7 @@
 #include <set>
 #include <assert.h>
 #include <utility>
+#include <map>
 
 using namespace std;
 
@@ -116,7 +117,7 @@ void read_graph(char* file,
 
 
 // given the full graph of clause dependencies, extract the proof containing only useful clauses
-void graph_to_proof(vector< vector<int> >& graph){
+void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses){
 	vector<int>* current_deps = new vector<int>;
 	vector<int> workpool;
 	set<int> seen;
@@ -152,27 +153,34 @@ void graph_to_proof(vector< vector<int> >& graph){
 		if(seen.find(i) == seen.end()){
 			delete_count++;
 			graph[i].clear();
+			clauses[i].clear();
 		}
 	}
 	cout<<"Count: "<<count << "/" <<graph.size()<<endl;
 	cout<<"Deleted: "<<delete_count << "/" <<graph.size()<<endl;
 }
 
-void convert_graph_to_dimacs_format(vector<vector<int> > graph, char* dimacs_out_file, int& nVars, int& nClauses){
-	// for each edge in the graph, convert to a dimacs clause to run louvain
+void convert_graph_to_dimacs_format(vector<vector<int> >& graph, vector<vector<int> >& clauses, char* dimacs_out_file, int& nVars, int& nClauses){
+	// for each edge in the graph, convert to a dimacs clause to run features_s
 	ofstream file;
 	file.open (dimacs_out_file);
 
-	nVars = graph.size();
-	for(int i = 1; i < graph.size(); i++){
-		nClauses += graph[i].size();
+	nVars = 0;
+	map<int, int> m; // maps cids from the original graph to new cids, ignoring unused clauses
+	for(int i = 0; i < graph.size(); i++){
+		// the i == 0 case needs an id but does not have a clause, since it's the root conflict
+		if(clauses[i].size() > 0 || i == 0){
+			nVars++;
+			m[i] = nVars;
+			nClauses += graph[i].size();
+		}
 	}
 
 	file<<"p cnf " << nVars << " " << nClauses <<endl;
-	for(int i = 1; i < graph.size(); i++){
+	for(int i = 0; i < graph.size(); i++){
 		vector<int> adjacent_nodes = graph[i];
 		for(auto j : adjacent_nodes){
-			file<<i << " " << j<< " 0\n";
+			file<<m[i] << " " << m[j]<< " 0\n";
 		}
 	}
 	file.close();
@@ -194,10 +202,10 @@ int main(int argc, char * argv[]) {
 	char* dimacs_out_file = argv[2];
 
 	read_graph(file, graph, clauses, units);
-	graph_to_proof(graph);
+	graph_to_proof(graph, clauses);
 	int nVars = 0;
 	int nClauses = 0;
-	convert_graph_to_dimacs_format(graph, dimacs_out_file, nVars, nClauses);
+	convert_graph_to_dimacs_format(graph, clauses, dimacs_out_file, nVars, nClauses);
 	/*
 	for(auto c : clauses){
 		for(int i : c)
