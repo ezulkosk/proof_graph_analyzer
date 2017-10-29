@@ -7,14 +7,13 @@ base_dir=$1
 maplesat=$2
 proof_graph=$3
 graph_features=$4
-
+cnf_file=$5
 
 for i in graph cmty graph_cmty graph_cnf graph_scale_free
 do
 	mkdir -p ${base_dir}/${i}
 done	
 
-cnf_file=$2
 name=`basename $cnf_file .cnf`
 echo $name
 
