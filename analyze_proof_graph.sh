@@ -28,7 +28,7 @@ ${proof_graph} ${base_dir}/graph/${name}.proof_graph /home/ezulkosk/${name}.grap
 cp /home/ezulkosk/${name}.graph_cnf ${base_dir}/graph/${name}.graph_cnf
 
 # get the cmty structure and power-law data for the graph_cnf
-#${graph_features} -1 -5 -k ${base_dir}/graph/${name}.normalized_var_dist -g ${base_dir}/graph/${name}.var_dist_plot -t ${base_dir}/graph/${name}.var_dist -l ${base_dir}/graph/${name}.graph_scale_free -q ${base_dir}/graph/${name}.graph_cmty -y ${base_dir}/graph/${name}.graph_q ${base_dir}/graph/${name}.graph_cnf
+${graph_features} -1 -5 -k ${base_dir}/graph/${name}.normalized_var_dist -g ${base_dir}/graph/${name}.var_dist_plot -t ${base_dir}/graph/${name}.var_dist -l ${base_dir}/graph/${name}.graph_scale_free -q ${base_dir}/graph/${name}.graph_cmty -y ${base_dir}/graph/${name}.graph_q ${base_dir}/graph/${name}.graph_cnf
 
 
 # graph clause-size|lbd vs utility 
