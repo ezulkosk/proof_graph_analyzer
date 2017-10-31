@@ -177,10 +177,11 @@ void convert_graph_to_dimacs_format(vector<vector<int> >& graph, vector<vector<i
 	}
 
 	file<<"p cnf " << nVars << " " << nClauses <<endl;
+	cout<<"p cnf " << nVars << " " << nClauses <<endl;
 	for(int i = 0; i < graph.size(); i++){
 		vector<int> adjacent_nodes = graph[i];
 		for(auto j : adjacent_nodes){
-			file<<m[i] << " " << m[j]<< " 0\n";
+		  file<<m[i] << " " << m[j]<< " 0"<<endl;
 		}
 	}
 	file.close();
