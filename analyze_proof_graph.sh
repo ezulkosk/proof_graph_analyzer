@@ -24,7 +24,8 @@ echo $name
 #${maplesat} -proof-graph=${base_dir}/graph/${name}.graph ${cnf_file}
 
 # dump the graph_cnf
-${proof_graph} ${base_dir}/proof_graph/${name}.proof_graph ${base_dir}/graph_cnf/${name}.graph_cnf
+${proof_graph} ${base_dir}/proof_graph/${name}.proof_graph /home/ezulkosk/${name}.graph_cnf #${base_dir}/graph_cnf/${name}.graph_cnf
+mv /home/ezulkosk/${name}.graph_cnf ${base_dir}/graph_cnf/${name}.graph_cnf
 
 # get the cmty structure and power-law data for the graph_cnf
 ${graph_features} -1 -5 -k ${base_dir}/graph_scale_free/${name}.normalized_var_dist -g ${base_dir}/graph_scale_free/${name}.var_dist_plot -t ${base_dir}/graph_scale_free/${name}.var_dist -l ${base_dir}/graph_scale_free/${name}.graph_scale_free -q ${base_dir}/graph_cmty/${name}.graph_cmty -y ${base_dir}/graph_cmty/${name}.graph_q ${base_dir}/graph_cnf/${name}.graph_cnf
