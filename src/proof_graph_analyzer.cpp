@@ -29,7 +29,9 @@ void print_vector(vector<int>& v){
 void read_graph(char* file,
 		vector< vector<int> >& graph,
 		vector< vector<int> >& clauses,
-		vector< pair<int, int> >& units){
+		vector< pair<int, int> >& units,
+		int& nOrigVars,
+		int& nOrigClauses){
 	int num;
 	vector<int> dummy;
 	vector<int>* final_deps = new vector<int>;
@@ -75,6 +77,8 @@ void read_graph(char* file,
 			else if(mode == MODE_DEPS){
 				// for each dep id, get the clause
 				//   for each lit in the clause, if it's a unit, add the unit_id to the deps
+				if(curr_deps->size() == 0)
+					nOrigClauses++;
 				for(int i = 0; i < curr_deps->size(); i++){
 					int cid = curr_deps->at(i);
 					vector<int> clause = clauses[cid];
@@ -95,8 +99,11 @@ void read_graph(char* file,
 				mode = (mode + 1) % 3;
 
 		}
-		else if(mode == MODE_LITS)
+		else if(mode == MODE_LITS){
 			curr_clause->push_back(num);
+			if(abs(num) > nOrigVars)
+				nOrigVars = abs(num);
+		}
 		else if(mode == MODE_DEPS)
 			curr_deps->push_back(num);
 		else if(mode == MODE_FINAL_CONFLICT_UNITS){
@@ -160,23 +167,25 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 	cout<<"Deleted: "<<delete_count << "/" <<graph.size()<<endl;
 }
 
-void convert_graph_to_dimacs_format(vector<vector<int> >& graph, vector<vector<int> >& clauses, char* dimacs_out_file, int& nVars, int& nClauses){
+void convert_graph_to_dimacs_format(vector<vector<int> >& graph, vector<vector<int> >& clauses, char* dimacs_out_file,
+		int& nProofNodes, int& nProofEdges){
 	// for each edge in the graph, convert to a dimacs clause to run features_s
 	ofstream file;
 	file.open (dimacs_out_file);
 
-	nVars = 0;
+	nProofNodes = 0;
+	nProofEdges = 0;
 	map<int, int> m; // maps cids from the original graph to new cids, ignoring unused clauses
 	for(int i = 0; i < graph.size(); i++){
 		// the i == 0 case needs an id but does not have a clause, since it's the root conflict
 		if(clauses[i].size() > 0 || i == 0){
-			nVars++;
-			m[i] = nVars;
-			nClauses += graph[i].size();
+			nProofNodes++;
+			m[i] = nProofNodes;
+			nProofEdges += graph[i].size();
 		}
 	}
 
-	file<<"p cnf " << nVars << " " << nClauses <<endl;
+	file<<"p cnf " << nProofNodes << " " << nProofEdges <<endl;
 	for(int i = 0; i < graph.size(); i++){
 		vector<int> adjacent_nodes = graph[i];
 		for(auto j : adjacent_nodes){
@@ -186,6 +195,34 @@ void convert_graph_to_dimacs_format(vector<vector<int> >& graph, vector<vector<i
 	file.close();
 }
 
+void convert_proof_to_dimacs_format(vector<vector<int> >& graph, vector<vector<int> >& clauses,
+		char* dimacs_out_file, int& nOrigVars, int& nProofNodes){
+	// for each clause in the proof, output to a dimacs clause to run features_s
+	ofstream file;
+	file.open (dimacs_out_file);
+
+	file<<"p cnf " << nOrigVars << " " << nProofNodes <<endl;
+	for(int i = 0; i < graph.size(); i++){
+		if(clauses[i].size() > 0 || i == 0){
+			for(auto j: clauses[i])
+				file<<j << " ";
+			file<<"0"<<endl;
+		}
+	}
+	file.close();
+}
+
+void proofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& clauses,
+		char* proof_clause_uses_file){
+	// for each clause, output how many times it was used to derive another clause
+	// outputs a list of (cid, usages) pairs
+	ofstream file;
+	file.open (proof_clause_uses_file);
+
+	file.close();
+}
+
+
 
 int main(int argc, char * argv[]) {
 	vector< pair<int, int> > units; // (unit, unit_id) pairs
@@ -193,19 +230,25 @@ int main(int argc, char * argv[]) {
 	vector< vector<int> > proof;
 	vector< vector<int> > clauses;
 
-
-	if(argc < 3){
-		cout << "USAGE: ./proof_graph_analyzer graph_file dimacs_out_file" << endl;
+	if(argc < 5){
+		cout << "USAGE: ./proof_graph_analyzer graph_file graph_cnf_out_file proof_out_file proof_clause_uses_file" << endl;
 		return 1;
 	}
 	char* file = argv[1];
-	char* dimacs_out_file = argv[2];
+	char* graph_cnf_file = argv[2];
+	char* proof_out_file = argv[3];
+	char* proof_clause_uses_file = argv[4];
 
-	read_graph(file, graph, clauses, units);
+	int nOrigVars = 0;
+	int nOrigClauses = 0;
+	int nProofNodes = 0; // corresponds to the number of clauses in the proof
+	int nProofEdges = 0;
+
+	read_graph(file, graph, clauses, units, nOrigVars, nOrigClauses);
 	graph_to_proof(graph, clauses);
-	int nVars = 0;
-	int nClauses = 0;
-	convert_graph_to_dimacs_format(graph, clauses, dimacs_out_file, nVars, nClauses);
+	convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
+	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
+	proofClauseUses(graph, clauses, proof_clause_uses_file, nProofNodes);
 	/*
 	for(auto c : clauses){
 		for(int i : c)

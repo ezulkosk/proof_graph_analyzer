@@ -21,7 +21,7 @@ echo $name
 #${graph_features} -5 -q ${base_dir}/cmty/${name}.cmty -y ${base_dir}/cmty/${name}.q ${cnf_file}
 
 # get the proof graph certificate from maplesat
-#${maplesat} -proof-graph=${base_dir}/graph/${name}.graph ${cnf_file}
+#${maplesat} -proof-graph=${base_dir}/proof_graph/${name}.proof_graph ${cnf_file}
 
 # dump the graph_cnf
 ${proof_graph} ${base_dir}/proof_graph/${name}.proof_graph ${base_dir}/graph_cnf/${name}.graph_cnf
