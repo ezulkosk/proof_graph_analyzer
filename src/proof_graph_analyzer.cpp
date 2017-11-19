@@ -11,8 +11,12 @@
 #include <assert.h>
 #include <utility>
 #include <map>
+#include <algorithm>
+
 
 using namespace std;
+
+
 
 
 
@@ -23,8 +27,87 @@ void print_vector(vector<int>& v){
 	cout<<endl;
 }
 
+void growTo(vector<int>& v, int s){
+	if(v.size() < s){
+		for(int i = v.size(); i < s; i++){
+			v.push_back(0);
+		}
+	}
+}
+
+void growTo(vector<double>& v, int s){
+	if(v.size() < s){
+		for(int i = v.size(); i < s; i++){
+			v.push_back(0);
+		}
+	}
+}
+
+
+static double gini(vector<double>& vals){
+	// compute gini coefficient of normalized picks
+	for(int i = 0; i < vals.size() - 1; i++){
+		for(int j = i + 1; j < vals.size(); j++){
+			if(vals[i] > vals[j]){
+				double temp = vals[i];
+				vals[i] = vals[j];
+				vals[j] = temp;
+			}
+		}
+	}
+	double height = 0;
+	double area = 0;
+	double fair_area = 0;
+	for(int i = 0; i < vals.size(); i++){
+		height += vals[i];
+		area += height - (vals[i] / 2);
+	}
+	fair_area = height * (float(vals.size()) / 2);
+	if(fair_area != 0)
+		return (fair_area - area) / fair_area;
+	else
+		return -1;
+}
+
+
+void read_cmtys(char* cmty_file,
+		vector<int>& cmty,
+		vector<int>& cmty_picks,
+		vector<int>& cmty_size,
+		vector<double>& cmty_clauses){
+	FILE* cfile = fopen(cmty_file, "r");
+	if (cfile == NULL)
+		fprintf(stderr, "could not open file %s\n", (const char*) cfile), exit(1);
+	int v;
+	int c;
+	// File is zero-based, vector should store starting at 1
+	cmty.push_back(-1);
+	int largest_cmty_index = -1;
+	while (fscanf(cfile, "%d %d\n", &v, &c) == 2){
+		if(cmty.size() <= v+1)
+			growTo(cmty, v+2);
+		cmty[v+1] = c;
+		if(c > largest_cmty_index){
+			largest_cmty_index = c;
+			growTo(cmty_picks, largest_cmty_index + 1);
+			growTo(cmty_size, largest_cmty_index + 1);
+			growTo(cmty_clauses, largest_cmty_index + 1);
+		}
+		cmty_size[c] = cmty_size[c] + 1;
+	}
+}
+
+
 /*
- * Stores the deps of the final conflict in graph[0]
+ * Reads in the proof-graph output of maplesat structure_logging.
+ *
+ * @param file: -proof-graph output of maplesat structure_logging
+ * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
+ * @param clauses: stores the literals in each clause starting with ID = 1
+ * @param units: maps each unit clause to its ID
+ * @param nOrigVars: the number of variables in the original CNF formula
+ * @param nOrigClauses: the number of clauses in the original formula
+ *
  */
 void read_graph(char* file,
 		vector< vector<int> >& graph,
@@ -123,7 +206,13 @@ void read_graph(char* file,
 
 
 
-// given the full graph of clause dependencies, extract the proof containing only useful clauses
+/*
+ * Given the full graph of clause dependencies, extract the proof containing only useful clauses.
+ * Clears any entries in graph and clauses that are not in the proof.
+ *
+ * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
+ * @param clauses: stores the literals in each clause starting with ID = 1
+ */
 void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses){
 	vector<int>* current_deps = new vector<int>;
 	vector<int> workpool;
@@ -189,7 +278,7 @@ void convert_graph_to_dimacs_format(vector<vector<int> >& graph, vector<vector<i
 	for(int i = 0; i < graph.size(); i++){
 		vector<int> adjacent_nodes = graph[i];
 		for(auto j : adjacent_nodes){
-			file<<m[i] << " " << m[j]<< " 0\n";
+		  file<<m[i] << " " << m[j]<< " 0"<<endl;
 		}
 	}
 	file.close();
@@ -212,13 +301,94 @@ void convert_proof_to_dimacs_format(vector<vector<int> >& graph, vector<vector<i
 	file.close();
 }
 
-void proofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& clauses,
-		char* proof_clause_uses_file){
-	// for each clause, output how many times it was used to derive another clause
-	// outputs a list of (cid, usages) pairs
-	ofstream file;
-	file.open (proof_clause_uses_file);
 
+/*
+ * For each clause, output how many times it was used to derive another clause.
+ * Outputs a list of (cid, usages) pairs.
+ *
+ * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
+ * @param clauses: stores the literals in each clause starting with ID = 1
+ * @param proofClauseUses: stores the number of times each clause_i was used to derive another clause
+ * @param proof_clause_uses_file: the file to output the usage pairs
+ * @param nProofNodes: the number of clauses used in the proof
+ *
+ */
+void getProofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& clauses, vector<int>& proofClauseUses,
+		     char* proof_clause_uses_file, int& nProofNodes){
+	ofstream file;
+	for(int i = 0; i < graph.size(); i++)
+		proofClauseUses.push_back(0);
+	file.open (proof_clause_uses_file);
+	for(unsigned i = 0; i < proofClauseUses.size(); i++){
+		if(clauses[i].size() > 0 || i == 0){
+			for(int j : graph[i]){
+				proofClauseUses[j]++;
+			}
+
+		}
+	}
+	for(unsigned i = 0; i < proofClauseUses.size(); i++)
+		file<<i<<" "<<proofClauseUses[i]<<endl;
+
+	file.close();
+}
+
+
+// output the spatial locality of the proof clauses, as defined in PoCR
+void proofSpatialLocality(vector< vector<int> >& clauses,
+		vector<int>& cmty, vector<int>& cmty_picks, vector<int>& cmty_size, vector<double>& cmty_clauses){
+	for(auto c: clauses){
+		int s = c.size();
+		for(int i = 0; i < s; i++){
+			int ci = cmty[abs(c[i])];
+			cmty_clauses[ci] = cmty_clauses[ci] + (double(1) / s);
+			cmty_picks[ci] += 1;
+		}
+	}
+}
+
+
+/*
+ * Performs multiple analyses of the properties of proof clauses
+ *
+ * @param proofClauseUses: stores the number of times each clause_i was used to derive another clause
+ * @param clauses: stores the literals in each clause starting with ID = 1
+ *
+ */
+void analyzeProofClauseUses(vector<int>& proofClauseUses, vector< vector<int> >& clauses,
+		vector<int>& cmty, vector<int>& cmty_picks, vector<int>& cmty_size, vector<double>& cmty_clauses,
+		char* proof_analyses_file){
+	assert(proofClauseUses[0] == 0);
+	// analyze the number of uses of each clause, bucketized by size
+	vector<int> size_bucket_uses;
+	vector<int> size_bucket_occs; // how often clauses of a given size occurred
+	ofstream file;
+
+	for(int i = 1; i < proofClauseUses.size(); i++){
+		vector<int> c = clauses[i];
+		int cs = c.size();
+		if(c.size() == 0)
+			continue;
+		growTo(size_bucket_uses, cs + 1);
+		growTo(size_bucket_occs, cs + 1);
+		size_bucket_uses[cs] += proofClauseUses[i];
+		size_bucket_occs[cs] += 1;
+	}
+	cout<<"Clauses uses bucketed by size\n";
+	cout<<"i uses occs uses/occs\n";
+	for(int i = 0; i < size_bucket_uses.size(); i++){
+		printf("%3d %9d %9d %9.4f\n", i, size_bucket_uses[i], size_bucket_occs[i], size_bucket_occs[i] == 0 ? 0 : (float)size_bucket_uses[i]/size_bucket_occs[i]);
+	}
+
+	file.open(proof_analyses_file);
+	file<<"SizeBucketUses";
+	for(int i = 0; i < size_bucket_uses.size(); i++)
+		file<<","<<size_bucket_uses[i];
+	file<<endl;
+	file<<"SizeBucketOccs";
+	for(int i = 0; i < size_bucket_occs.size(); i++)
+		file<<","<<size_bucket_occs[i];
+	file<<endl;
 	file.close();
 }
 
@@ -228,27 +398,41 @@ int main(int argc, char * argv[]) {
 	vector< pair<int, int> > units; // (unit, unit_id) pairs
 	vector< vector<int> > graph; // each index corresponds to a node, each element of graph[i] corresponds to deps[i]
 	vector< vector<int> > proof;
+	vector<int> proofClauseUses; // for each index i, maps how many times clause_i was used to derive another clause
 	vector< vector<int> > clauses;
+	vector<int> clauseUses; // TODO use
+	vector<int> cmty, cmty_picks, cmty_size; // cmty of each variable (one-based)
+	vector<double> cmty_clauses;
 
-	if(argc < 5){
-		cout << "USAGE: ./proof_graph_analyzer graph_file graph_cnf_out_file proof_out_file proof_clause_uses_file" << endl;
+
+	if(argc < 6){
+		cout << "USAGE: ./proof_graph_analyzer graph_file cnf_cmty_file graph_cnf_out_file proof_out_file proof_clause_uses_file proof_analyses_file" << endl;
 		return 1;
 	}
 	char* file = argv[1];
-	char* graph_cnf_file = argv[2];
-	char* proof_out_file = argv[3];
-	char* proof_clause_uses_file = argv[4];
+	char* cmty_file = argv[2]; // cmtys of the original formula (zero-based)
+	char* graph_cnf_file = argv[3];
+	char* proof_out_file = argv[4];
+	char* proof_clause_uses_file = argv[5];
+	char* proof_analyses_file = argv[6];
+
 
 	int nOrigVars = 0;
 	int nOrigClauses = 0;
 	int nProofNodes = 0; // corresponds to the number of clauses in the proof
 	int nProofEdges = 0;
 
+
 	read_graph(file, graph, clauses, units, nOrigVars, nOrigClauses);
+	read_cmtys(cmty_file, cmty, cmty_picks, cmty_size, cmty_clauses);
 	graph_to_proof(graph, clauses);
 	convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
-	proofClauseUses(graph, clauses, proof_clause_uses_file, nProofNodes);
+	getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
+	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file);
+
+	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses);
+
 	/*
 	for(auto c : clauses){
 		for(int i : c)
@@ -262,10 +446,16 @@ int main(int argc, char * argv[]) {
 		cout<<endl;
 	}
 
-	for(auto i : units)
-		cout<<i.first<<" ";
-	cout<<endl;
+	for(int i = 0; i < proofClauseUses.size(); i++){
+		cout<<clauses[i].size()<<" "<<proofClauseUses[i];
+		cout<<endl;
+	}
 	*/
+
+
+	//for(auto i : units)
+	//	cout<<i.first<<" "<<i.second<<endl;
+
 
 	return 0;
 }

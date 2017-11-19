@@ -8,10 +8,11 @@ maplesat=$2
 proof_graph=$3
 graph_features=$4
 cnf_file=$5
+cmty_file=$6
 
-for i in graph cmty graph_cmty graph_cnf graph_scale_free
+for i in graph cmty 
 do
-	mkdir -p ${base_dir}/${i}
+    mkdir -p ${base_dir}/${i}
 done	
 
 name=`basename $cnf_file .cnf`
@@ -21,14 +22,23 @@ echo $name
 #${graph_features} -5 -q ${base_dir}/cmty/${name}.cmty -y ${base_dir}/cmty/${name}.q ${cnf_file}
 
 # get the proof graph certificate from maplesat
-#${maplesat} -proof-graph=${base_dir}/proof_graph/${name}.proof_graph ${cnf_file}
+#${maplesat} -proof-graph=${base_dir}/graph/${name}.proof_graph ${cnf_file}
+
 
 # dump the graph_cnf
-${proof_graph} ${base_dir}/proof_graph/${name}.proof_graph ${base_dir}/graph_cnf/${name}.graph_cnf
-
-# get the cmty structure and power-law data for the graph_cnf
-${graph_features} -1 -5 -k ${base_dir}/graph_scale_free/${name}.normalized_var_dist -g ${base_dir}/graph_scale_free/${name}.var_dist_plot -t ${base_dir}/graph_scale_free/${name}.var_dist -l ${base_dir}/graph_scale_free/${name}.graph_scale_free -q ${base_dir}/graph_cmty/${name}.graph_cmty -y ${base_dir}/graph_cmty/${name}.graph_q ${base_dir}/graph_cnf/${name}.graph_cnf
-
+if grep -q "^0" ${base_dir}/graph/${name}.proof_graph; then
+    echo "Graph complete for ${base_dir}/${name}"
+    seed=$RANDOM
+    ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.graph_cnf ${base_dir}/graph/${name}.proof_cnf ${base_dir}/graph/${name}.proof_clauses_uses ${base_dir}/graph/${name}.proof_analyses #${base_dir}/graph_cnf/${name}.graph_cnf
+    #mv /home/ezulkosk/${name}.graph_cnf.${seed} ${base_dir}/graph/${name}.graph_cnf
+    #mv /home/ezulkosk/${name}.proof_cnf.${seed} ${base_dir}/graph/${name}.proof_cnf
+    #mv /home/ezulkosk/${name}.proof_clauses_uses.${seed} ${base_dir}/graph/${name}.proof_clauses_uses
+    
+    # get the cmty structure and power-law data for the graph_cnf
+    #${graph_features} -1 -5 -k ${base_dir}/graph/${name}.normalized_var_dist -g ${base_dir}/graph/${name}.var_dist_plot -t ${base_dir}/graph/${name}.var_dist -l ${base_dir}/graph/${name}.graph_scale_free -q ${base_dir}/graph/${name}.graph_cmty -y ${base_dir}/graph/${name}.graph_q ${base_dir}/graph/${name}.graph_cnf
+else
+    echo "Graph did not complete for ${base_dir}/${name}."
+fi
 
 # graph clause-size|lbd vs utility 
 
