@@ -4,14 +4,16 @@
 // Version     :
 //============================================================================
 
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <set>
 #include <assert.h>
-#include <utility>
-#include <map>
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <map>
+#include <set>
+#include <utility>
+#include <vector>
 
 
 using namespace std;
@@ -21,6 +23,13 @@ using namespace std;
 
 
 void print_vector(vector<int>& v){
+	for(auto i: v){
+		cout<<i<<" ";
+	}
+	cout<<endl;
+}
+
+void print_vector(vector<double>& v){
 	for(auto i: v){
 		cout<<i<<" ";
 	}
@@ -44,8 +53,7 @@ void growTo(vector<double>& v, int s){
 }
 
 
-static double gini(vector<double>& vals){
-	// compute gini coefficient of normalized picks
+static double gini(vector<double> vals){
 	for(int i = 0; i < vals.size() - 1; i++){
 		for(int j = i + 1; j < vals.size(); j++){
 			if(vals[i] > vals[j]){
@@ -205,6 +213,172 @@ void read_graph(char* file,
 }
 
 
+/**
+ * Records many properties of the clause at the given index
+ */
+void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector< int >& cmty,
+		set<int>& seen, vector<double>& var_pop, vector<double>& lit_pop, int index, ofstream& log){
+	int useful = 1;
+	if(seen.find(index) == seen.end())
+		useful = 0;
+
+	// record the size of the clause
+	vector<int> clause = clauses[index];
+	int size = clause.size();
+
+	// cmty span
+	set<int> cmtySpanSet;
+	for(auto l : clause){
+		cmtySpanSet.insert(cmty[abs(l)]);
+	}
+	int cmtySpan = cmtySpanSet.size();
+
+	// weighted cmty span
+	vector<int> cmtySpanVec;
+	for(auto l : clause){
+		cmtySpanVec.push_back(cmty[abs(l)]);
+	}
+	std::sort(cmtySpanVec.begin(), cmtySpanVec.end());
+	int prev = cmtySpanVec[0];
+	vector<double> cmtyCounts;
+	int count = 1;
+	cmtyCounts.push_back(count);
+	for(int i = 1; i < cmtySpanVec.size(); i++){
+		if(cmtySpanVec[i] == prev)
+			cmtyCounts[cmtyCounts.size()-1] += 1;
+		else{
+			cmtyCounts.push_back(1);
+			prev = cmtySpanVec[i];
+		}
+	}
+	double weightedCmtySpan = gini(cmtyCounts);
+
+	// time span of oldest dep
+	int minDep = graph.size();
+	for(int i : graph[index])
+		if(i < minDep)
+			minDep = i;
+	int timeSpanOfOldestDep;
+	if(graph[index].size() > 0)
+		timeSpanOfOldestDep = index - minDep;
+	else
+		timeSpanOfOldestDep = 0;
+
+	// avg time span of deps
+	int totalTimeSpanOfDeps = 0;
+	int totalDeps = 0;
+	for(int i : graph[index]){
+		totalTimeSpanOfDeps += index - i;
+		totalDeps++;
+	}
+	double avgTimeSpanOfDeps;
+	if(totalDeps > 0)
+		avgTimeSpanOfDeps = ((double)totalTimeSpanOfDeps) / totalDeps;
+	else
+		avgTimeSpanOfDeps = 0;
+
+	// set of vars in deps
+	set<int> varsInDeps;
+	for(int i : graph[index]){
+		vector<int> cl = clauses[i];
+		for(int l : cl){
+			varsInDeps.insert(abs(l));
+		}
+	}
+	int totalVarsInDeps = varsInDeps.size();
+
+	// average popularity of clause vars and literals
+	double clauseVarPop = 0;
+	double clauseLitPop = 0;
+	double worstLitPop = 1;
+	double secondWorstLitPop = 1;
+	double worstVarPop = 1;
+	double secondWorstVarPop = 1;
+
+	double v_temp = 0;
+	double l_temp = 0;
+	for(int l : clause){
+		if(l < 0){
+			l = abs(l);
+			v_temp = var_pop[l];
+			l_temp = lit_pop[(2*l) - 1];
+		}
+		else{
+			v_temp = var_pop[l];
+			l_temp = lit_pop[2*l];
+		}
+		if(v_temp < worstVarPop){
+			secondWorstVarPop = worstVarPop;
+			worstVarPop = v_temp;
+		}
+		else if(v_temp < secondWorstVarPop)
+			secondWorstVarPop = v_temp;
+		if(l_temp < worstLitPop){
+			secondWorstLitPop = worstLitPop;
+			worstLitPop = l_temp;
+		}
+		else if(l_temp < secondWorstLitPop)
+			secondWorstLitPop = l_temp;
+		clauseVarPop += v_temp;
+		clauseLitPop += l_temp;
+	}
+	clauseLitPop /= clause.size();
+	clauseVarPop /= clause.size();
+	double worst2VarPops = worstVarPop + secondWorstVarPop;
+	double worst2LitPops = worstLitPop + secondWorstLitPop;
+
+	log<<index<<","
+			<<useful<<","
+			<<size<<","
+			<<cmtySpan<<","
+			<<weightedCmtySpan<<","
+			<<timeSpanOfOldestDep<<","
+			<<avgTimeSpanOfDeps<<","
+			<<totalVarsInDeps<<","
+			<<totalDeps<<","
+			<<clauseVarPop<<","
+			<<clauseLitPop<<","
+			<<worst2VarPops<<","
+			<<worst2LitPops<<endl;
+}
+
+/*
+ * Normalize a vector of doubles such that they sum to 1.
+ */
+void normalize_vector(vector<double>& v){
+	double weight = 0;
+	for(double d : v)
+		weight += d;
+	for(int i = 0; i < v.size(); i++){
+		v[i] = v[i] / weight;
+	}
+}
+
+
+void get_var_and_lit_popularity(vector< vector<int> >& graph, vector< vector<int> >& clauses,
+		vector<double>& var_pop, vector<double>& lit_pop)
+{
+	for(int i = 0; i < graph.size(); i++){
+		if(graph[i].size() == 0){
+			// no deps, must be an input clause
+			vector<int> clause = clauses[i];
+			for(auto l : clause){
+				if(l < 0){
+					l = abs(l);
+					lit_pop[(2*l)-1]++;
+					var_pop[l]++;
+				}
+				else{
+					lit_pop[2*l]++;
+					var_pop[l]++;
+				}
+			}
+		}
+	}
+	normalize_vector(var_pop);
+	normalize_vector(lit_pop);
+}
+
 
 /*
  * Given the full graph of clause dependencies, extract the proof containing only useful clauses.
@@ -213,10 +387,13 @@ void read_graph(char* file,
  * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
  * @param clauses: stores the literals in each clause starting with ID = 1
  */
-void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses){
-	vector<int>* current_deps = new vector<int>;
+void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& cmty, vector<double>& var_pop, vector<double>& lit_pop, char* clausePropertiesFile){
 	vector<int> workpool;
 	set<int> seen;
+
+	ofstream clausePropertiesLog;
+
+
 	cout<<"Running graph to proof"<<endl;
 	for(int i : graph[0]){
 		if(seen.find(i) == seen.end()){
@@ -243,6 +420,17 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 		}
 	}
 
+	clausePropertiesLog.open(clausePropertiesFile);
+	clausePropertiesLog<<"id,useful,size,cmty_span,weighted_cmty_span,time_span_of_oldest_dep,"<<
+			"avg_time_span_of_deps,set_of_vars_in_deps_size,total_deps,popularity_of_vars,"<<
+			"popularity_of_literals,var_pop_worst2,lit_pop_worst2"<<endl;
+
+	for(int i = 1; i < graph.size(); i++){
+		logClauseProperties(graph, clauses, cmty, seen, var_pop, lit_pop, i, clausePropertiesLog);
+	}
+	clausePropertiesLog.close();
+
+
 	// delete entries from the graph that were never seen
 	int delete_count = 0;
 	for(int i = 0; i < graph.size(); i++){
@@ -254,6 +442,7 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 	}
 	cout<<"Count: "<<count << "/" <<graph.size()<<endl;
 	cout<<"Deleted: "<<delete_count << "/" <<graph.size()<<endl;
+
 }
 
 void convert_graph_to_dimacs_format(vector<vector<int> >& graph, vector<vector<int> >& clauses, char* dimacs_out_file,
@@ -334,18 +523,7 @@ void getProofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& claus
 }
 
 
-// output the spatial locality of the proof clauses, as defined in PoCR
-void proofSpatialLocality(vector< vector<int> >& clauses,
-		vector<int>& cmty, vector<int>& cmty_picks, vector<int>& cmty_size, vector<double>& cmty_clauses){
-	for(auto c: clauses){
-		int s = c.size();
-		for(int i = 0; i < s; i++){
-			int ci = cmty[abs(c[i])];
-			cmty_clauses[ci] = cmty_clauses[ci] + (double(1) / s);
-			cmty_picks[ci] += 1;
-		}
-	}
-}
+
 
 
 /*
@@ -357,12 +535,11 @@ void proofSpatialLocality(vector< vector<int> >& clauses,
  */
 void analyzeProofClauseUses(vector<int>& proofClauseUses, vector< vector<int> >& clauses,
 		vector<int>& cmty, vector<int>& cmty_picks, vector<int>& cmty_size, vector<double>& cmty_clauses,
-		char* proof_analyses_file){
+		char* proof_analyses_file, ofstream& proofAnalysesFile){
 	assert(proofClauseUses[0] == 0);
 	// analyze the number of uses of each clause, bucketized by size
 	vector<int> size_bucket_uses;
 	vector<int> size_bucket_occs; // how often clauses of a given size occurred
-	ofstream file;
 
 	for(int i = 1; i < proofClauseUses.size(); i++){
 		vector<int> c = clauses[i];
@@ -380,19 +557,96 @@ void analyzeProofClauseUses(vector<int>& proofClauseUses, vector< vector<int> >&
 		printf("%3d %9d %9d %9.4f\n", i, size_bucket_uses[i], size_bucket_occs[i], size_bucket_occs[i] == 0 ? 0 : (float)size_bucket_uses[i]/size_bucket_occs[i]);
 	}
 
-	file.open(proof_analyses_file);
-	file<<"SizeBucketUses";
+	proofAnalysesFile<<"SizeBucketUses";
 	for(int i = 0; i < size_bucket_uses.size(); i++)
-		file<<","<<size_bucket_uses[i];
-	file<<endl;
-	file<<"SizeBucketOccs";
+		proofAnalysesFile<<","<<size_bucket_uses[i];
+	proofAnalysesFile<<endl;
+	proofAnalysesFile<<"SizeBucketOccs";
 	for(int i = 0; i < size_bucket_occs.size(); i++)
-		file<<","<<size_bucket_occs[i];
-	file<<endl;
-	file.close();
+		proofAnalysesFile<<","<<size_bucket_occs[i];
+	proofAnalysesFile<<endl;
+
+	// analyze the number of uses of each clause, bucketized by cmty span (not normalized by size)
+	vector<int> cmtySpanBucketUses;
+	vector<int> cmtySpanBucketOccs; // how often clauses of a given size occurred
+
+	for(int i = 1; i < proofClauseUses.size(); i++){
+		vector<int> c = clauses[i];
+		// get the number of cmtys that the clause spans
+		if(c.size() == 0)
+			continue;
+		int cs = 0;
+		set<int> cmtysInClause;
+		cmtysInClause.clear();
+
+		for(auto l : c){
+			int curr_cmty = cmty[abs(l)];
+			cmtysInClause.insert(curr_cmty);
+		}
+		cs = cmtysInClause.size();
+
+		growTo(cmtySpanBucketUses, cs + 1);
+		growTo(cmtySpanBucketOccs, cs + 1);
+		cmtySpanBucketUses[cs] += proofClauseUses[i];
+		cmtySpanBucketOccs[cs] += 1;
+	}
+	cout<<"Clauses uses bucketed by cmty span\n";
+	cout<<"i uses occs uses/occs\n";
+	for(int i = 0; i < cmtySpanBucketUses.size(); i++){
+		printf("%3d %9d %9d %9.4f\n", i, cmtySpanBucketUses[i], cmtySpanBucketOccs[i], cmtySpanBucketOccs[i] == 0 ? 0 : (float)cmtySpanBucketUses[i]/cmtySpanBucketOccs[i]);
+	}
+
+	proofAnalysesFile<<"CmtySpanBucketUses";
+	for(int i = 0; i < cmtySpanBucketUses.size(); i++)
+		proofAnalysesFile<<","<<cmtySpanBucketUses[i];
+	proofAnalysesFile<<endl;
+	proofAnalysesFile<<"CmtySpanBucketOccs";
+	for(int i = 0; i < cmtySpanBucketOccs.size(); i++)
+		proofAnalysesFile<<","<<cmtySpanBucketOccs[i];
+	proofAnalysesFile<<endl;
 }
 
 
+// output the spatial locality of the proof clauses, as defined in PoCR
+void proofSpatialLocality(vector< vector<int> >& clauses,
+		vector<int>& cmty, vector<int>& cmty_picks, vector<int>& cmty_size, vector<double>& cmty_clauses,
+		ofstream& proofAnalysesFile){
+	for(auto c: clauses){
+		int s = c.size();
+		for(int i = 0; i < s; i++){
+			int ci = cmty[abs(c[i])];
+			cmty_clauses[ci] = cmty_clauses[ci] + (double(1) / s);
+			cmty_picks[ci] += 1;
+		}
+	}
+
+
+	vector<double> cmtyOccs;
+	for(auto e : cmty_picks)
+		cmtyOccs.push_back(e);
+	// non-normalized by size
+	proofAnalysesFile<<"GiniCmtyOccs,"<<gini(cmtyOccs)<<endl;
+	proofAnalysesFile<<"GiniCmtyClauses,"<<gini(cmty_clauses)<<endl;
+
+	// normalized by size
+	vector<double> cmtyOccsNormalized;
+	for(int i = 0; i < cmtyOccs.size(); i++){
+		if(cmty_size[i] == 0)
+			cmtyOccsNormalized.push_back(0);
+		else
+			cmtyOccsNormalized.push_back(cmtyOccs[i] / cmty_size[i]);
+	}
+	proofAnalysesFile<<"GiniCmtyOccsNormalizedBySize,"<<gini(cmtyOccsNormalized)<<endl;
+
+	vector<double> cmtyClausesNormalized;
+	for(int i = 0; i < cmty_clauses.size(); i++){
+		if(cmty_size[i] == 0)
+			cmtyClausesNormalized.push_back(0);
+		else
+			cmtyClausesNormalized.push_back((double)cmty_clauses[i] / cmty_size[i]);
+	}
+	proofAnalysesFile<<"GiniCmtyClausesNormalizedBySize,"<<gini(cmtyClausesNormalized)<<endl;
+}
 
 int main(int argc, char * argv[]) {
 	vector< pair<int, int> > units; // (unit, unit_id) pairs
@@ -403,19 +657,21 @@ int main(int argc, char * argv[]) {
 	vector<int> clauseUses; // TODO use
 	vector<int> cmty, cmty_picks, cmty_size; // cmty of each variable (one-based)
 	vector<double> cmty_clauses;
+	vector<double> var_pop;
+	vector<double> lit_pop; // +i at index 2i, -i at index 2i - 1
 
 
 	if(argc < 6){
 		cout << "USAGE: ./proof_graph_analyzer graph_file cnf_cmty_file graph_cnf_out_file proof_out_file proof_clause_uses_file proof_analyses_file" << endl;
 		return 1;
 	}
-	char* file = argv[1];
+	char* graph_file = argv[1];
 	char* cmty_file = argv[2]; // cmtys of the original formula (zero-based)
 	char* graph_cnf_file = argv[3];
 	char* proof_out_file = argv[4];
 	char* proof_clause_uses_file = argv[5];
 	char* proof_analyses_file = argv[6];
-
+	char* clause_properties_file = argv[7];
 
 	int nOrigVars = 0;
 	int nOrigClauses = 0;
@@ -423,15 +679,23 @@ int main(int argc, char * argv[]) {
 	int nProofEdges = 0;
 
 
-	read_graph(file, graph, clauses, units, nOrigVars, nOrigClauses);
+	read_graph(graph_file, graph, clauses, units, nOrigVars, nOrigClauses);
+	growTo(var_pop, nOrigVars+1);
+	growTo(lit_pop, (nOrigVars+1) * 2);
+	get_var_and_lit_popularity(graph, clauses, var_pop, lit_pop);
 	read_cmtys(cmty_file, cmty, cmty_picks, cmty_size, cmty_clauses);
-	graph_to_proof(graph, clauses);
+	graph_to_proof(graph, clauses, cmty, var_pop, lit_pop, clause_properties_file);
 	convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
 	getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
-	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file);
 
-	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses);
+	ofstream proofAnalysesFile;
+	proofAnalysesFile.open(proof_analyses_file);
+
+	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file, proofAnalysesFile);
+	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proofAnalysesFile);
+
+	proofAnalysesFile.close();
 
 	/*
 	for(auto c : clauses){
