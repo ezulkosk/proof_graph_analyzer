@@ -217,7 +217,7 @@ void read_graph(char* file,
  * Records many properties of the clause at the given index
  */
 void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector< int >& cmty,
-		set<int>& seen, vector<double>& var_pop, vector<double>& lit_pop, int index, ofstream& log){
+		set<int>& seen, int proofClauseUsesIndex, vector<double>& var_pop, vector<double>& lit_pop, int index, ofstream& log){
 	int useful = 1;
 	if(seen.find(index) == seen.end())
 		useful = 0;
@@ -329,6 +329,7 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 
 	log<<index<<","
 			<<useful<<","
+			<<proofClauseUsesIndex<<","
 			<<size<<","
 			<<cmtySpan<<","
 			<<weightedCmtySpan<<","
@@ -379,6 +380,30 @@ void get_var_and_lit_popularity(vector< vector<int> >& graph, vector< vector<int
 	normalize_vector(lit_pop);
 }
 
+/*
+ * For each clause, output how many times it was used to derive another clause.
+ * Outputs a list of (cid, usages) pairs.
+ *
+ * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
+ * @param clauses: stores the literals in each clause starting with ID = 1
+ * @param proofClauseUses: stores the number of times each clause_i was used to derive another clause
+ * @param proof_clause_uses_file: the file to output the usage pairs
+ * @param nProofNodes: the number of clauses used in the proof
+ *
+ */
+void getProofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& clauses, set<int>& seen,
+		vector<int>& proofClauseUses){
+	for(int i = 0; i < graph.size(); i++)
+		proofClauseUses.push_back(0);
+	for(unsigned i = 0; i < proofClauseUses.size(); i++){
+		if(seen.find(i) != seen.end() || i == 0){
+			for(int j : graph[i]){
+				proofClauseUses[j]++;
+			}
+
+		}
+	}
+}
 
 /*
  * Given the full graph of clause dependencies, extract the proof containing only useful clauses.
@@ -387,7 +412,8 @@ void get_var_and_lit_popularity(vector< vector<int> >& graph, vector< vector<int
  * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
  * @param clauses: stores the literals in each clause starting with ID = 1
  */
-void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& cmty, vector<double>& var_pop, vector<double>& lit_pop, char* clausePropertiesFile){
+void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& cmty,
+		vector<int>& proofClauseUses, vector<double>& var_pop, vector<double>& lit_pop, char* clausePropertiesFile){
 	vector<int> workpool;
 	set<int> seen;
 
@@ -420,13 +446,16 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 		}
 	}
 
+	getProofClauseUses(graph, clauses, seen, proofClauseUses);
+
+
 	clausePropertiesLog.open(clausePropertiesFile);
-	clausePropertiesLog<<"id,useful,size,cmty_span,weighted_cmty_span,time_span_of_oldest_dep,"<<
+	clausePropertiesLog<<"id,useful,uses,size,cmty_span,weighted_cmty_span,time_span_of_oldest_dep,"<<
 			"avg_time_span_of_deps,set_of_vars_in_deps_size,total_deps,popularity_of_vars,"<<
 			"popularity_of_literals,var_pop_worst2,lit_pop_worst2"<<endl;
 
 	for(int i = 1; i < graph.size(); i++){
-		logClauseProperties(graph, clauses, cmty, seen, var_pop, lit_pop, i, clausePropertiesLog);
+		logClauseProperties(graph, clauses, cmty, seen, proofClauseUses[i], var_pop, lit_pop, i, clausePropertiesLog);
 	}
 	clausePropertiesLog.close();
 
@@ -491,36 +520,7 @@ void convert_proof_to_dimacs_format(vector<vector<int> >& graph, vector<vector<i
 }
 
 
-/*
- * For each clause, output how many times it was used to derive another clause.
- * Outputs a list of (cid, usages) pairs.
- *
- * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
- * @param clauses: stores the literals in each clause starting with ID = 1
- * @param proofClauseUses: stores the number of times each clause_i was used to derive another clause
- * @param proof_clause_uses_file: the file to output the usage pairs
- * @param nProofNodes: the number of clauses used in the proof
- *
- */
-void getProofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& clauses, vector<int>& proofClauseUses,
-		     char* proof_clause_uses_file, int& nProofNodes){
-	ofstream file;
-	for(int i = 0; i < graph.size(); i++)
-		proofClauseUses.push_back(0);
-	file.open (proof_clause_uses_file);
-	for(unsigned i = 0; i < proofClauseUses.size(); i++){
-		if(clauses[i].size() > 0 || i == 0){
-			for(int j : graph[i]){
-				proofClauseUses[j]++;
-			}
 
-		}
-	}
-	for(unsigned i = 0; i < proofClauseUses.size(); i++)
-		file<<i<<" "<<proofClauseUses[i]<<endl;
-
-	file.close();
-}
 
 
 
@@ -684,10 +684,10 @@ int main(int argc, char * argv[]) {
 	growTo(lit_pop, (nOrigVars+1) * 2);
 	get_var_and_lit_popularity(graph, clauses, var_pop, lit_pop);
 	read_cmtys(cmty_file, cmty, cmty_picks, cmty_size, cmty_clauses);
-	graph_to_proof(graph, clauses, cmty, var_pop, lit_pop, clause_properties_file);
+	graph_to_proof(graph, clauses, cmty, proofClauseUses, var_pop, lit_pop, clause_properties_file);
 	convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
-	getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
+	//getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
 
 	ofstream proofAnalysesFile;
 	proofAnalysesFile.open(proof_analyses_file);
