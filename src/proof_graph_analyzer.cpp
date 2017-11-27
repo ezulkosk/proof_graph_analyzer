@@ -158,6 +158,7 @@ void read_graph(char* file,
 		}
 		else if(!num){
 			if(mode == MODE_LITS){
+				std::sort((*curr_clause).begin(), (*curr_clause).end());
 				clauses.push_back(*curr_clause);
 				if(curr_clause->size() == 1){
 					// need size - 1 since we have dummys in index 0
@@ -251,6 +252,7 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 			prev = cmtySpanVec[i];
 		}
 	}
+
 	double weightedCmtySpan = gini(cmtyCounts);
 
 	// time span of oldest dep
@@ -271,6 +273,7 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 		totalTimeSpanOfDeps += index - i;
 		totalDeps++;
 	}
+
 	double avgTimeSpanOfDeps;
 	if(totalDeps > 0)
 		avgTimeSpanOfDeps = ((double)totalTimeSpanOfDeps) / totalDeps;
@@ -278,6 +281,7 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 		avgTimeSpanOfDeps = 0;
 
 	// set of vars in deps
+	// TODO compare to total vars in deps, and also do for lits
 	set<int> varsInDeps;
 	for(int i : graph[index]){
 		vector<int> cl = clauses[i];
@@ -286,6 +290,42 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 		}
 	}
 	int totalVarsInDeps = varsInDeps.size();
+
+
+	// merges of deps
+	int merge_count = 0;
+	int sizeOfAllDeps = 0;
+
+	for(int i = 0; i < ((int)graph[index].size()) - 1; i++){
+
+		vector<int> ci = clauses[i];
+		for(unsigned j = i + 1; j < graph[index].size(); j++){
+			vector<int> cj = clauses[j];
+
+			sizeOfAllDeps += cj.size();
+			// assumes clauses are sorted by read_graph()
+			unsigned ni = 0;
+			unsigned nj = 0;
+			while(ni < ci.size() && nj < cj.size()){
+				if(ci[ni] == cj[nj]){
+					merge_count++;
+					ni++;
+					nj++;
+				}
+				else if(ni == ci.size() || nj == cj.size())
+					break;
+				else if(ci[ni] < cj[nj])
+					ni++;
+				else
+					nj++;
+			}
+		}
+	}
+	int mergeRatio;
+	if(sizeOfAllDeps > 0)
+		mergeRatio = merge_count / sizeOfAllDeps;
+	else
+		mergeRatio = 0;
 
 	// average popularity of clause vars and literals
 	double clauseVarPop = 0;
@@ -327,6 +367,9 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 	double worst2VarPops = worstVarPop + secondWorstVarPop;
 	double worst2LitPops = worstLitPop + secondWorstLitPop;
 
+
+
+
 	log<<index<<","
 			<<useful<<","
 			<<proofClauseUsesIndex<<","
@@ -340,7 +383,8 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 			<<clauseVarPop<<","
 			<<clauseLitPop<<","
 			<<worst2VarPops<<","
-			<<worst2LitPops<<endl;
+			<<worst2LitPops<<","
+			<<mergeRatio<<endl;
 }
 
 /*
@@ -452,7 +496,7 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 	clausePropertiesLog.open(clausePropertiesFile);
 	clausePropertiesLog<<"id,useful,uses,size,cmty_span,weighted_cmty_span,time_span_of_oldest_dep,"<<
 			"avg_time_span_of_deps,set_of_vars_in_deps_size,total_deps,popularity_of_vars,"<<
-			"popularity_of_literals,var_pop_worst2,lit_pop_worst2"<<endl;
+			"popularity_of_literals,var_pop_worst2,lit_pop_worst2,merge_ratio"<<endl;
 
 	for(int i = 1; i < graph.size(); i++){
 		logClauseProperties(graph, clauses, cmty, seen, proofClauseUses[i], var_pop, lit_pop, i, clausePropertiesLog);
@@ -518,12 +562,6 @@ void convert_proof_to_dimacs_format(vector<vector<int> >& graph, vector<vector<i
 	}
 	file.close();
 }
-
-
-
-
-
-
 
 
 /*
@@ -683,15 +721,18 @@ int main(int argc, char * argv[]) {
 	growTo(var_pop, nOrigVars+1);
 	growTo(lit_pop, (nOrigVars+1) * 2);
 	get_var_and_lit_popularity(graph, clauses, var_pop, lit_pop);
+
 	read_cmtys(cmty_file, cmty, cmty_picks, cmty_size, cmty_clauses);
+
 	graph_to_proof(graph, clauses, cmty, proofClauseUses, var_pop, lit_pop, clause_properties_file);
+
 	convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
+
 	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
 	//getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
 
 	ofstream proofAnalysesFile;
 	proofAnalysesFile.open(proof_analyses_file);
-
 	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file, proofAnalysesFile);
 	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proofAnalysesFile);
 

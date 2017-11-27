@@ -4,12 +4,15 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 CPP_SRCS += \
+../src/merge_resolution_dimacs_check.cpp \
 ../src/proof_graph_analyzer.cpp 
 
 OBJS += \
+./src/merge_resolution_dimacs_check.o \
 ./src/proof_graph_analyzer.o 
 
 CPP_DEPS += \
+./src/merge_resolution_dimacs_check.d \
 ./src/proof_graph_analyzer.d 
 
 

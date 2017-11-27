@@ -28,7 +28,7 @@ echo $name
 # dump the graph_cnf
 if grep -q "^0" ${base_dir}/graph/${name}.proof_graph; then
     echo "Graph complete for ${base_dir}/${name}"
-    echo ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.graph_cnf ${base_dir}/graph/${name}.proof_cnf ${base_dir}/graph/${name}.proof_clauses_uses ${base_dir}/graph/${name}.proof_analyses
+    echo ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.graph_cnf ${base_dir}/graph/${name}.proof_cnf ${base_dir}/graph/${name}.proof_clauses_uses ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
     ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.graph_cnf ${base_dir}/graph/${name}.proof_cnf ${base_dir}/graph/${name}.proof_clauses_uses ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
 
     #${base_dir}/graph_cnf/${name}.graph_cnf
