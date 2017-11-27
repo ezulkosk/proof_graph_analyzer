@@ -89,17 +89,6 @@ void read_cmtys(char* cmty_file,
 }
 
 
-/*
- * Reads in the proof-graph output of maplesat structure_logging.
- *
- * @param file: -proof-graph output of maplesat structure_logging
- * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
- * @param clauses: stores the literals in each clause starting with ID = 1
- * @param units: maps each unit clause to its ID
- * @param nOrigVars: the number of variables in the original CNF formula
- * @param nOrigClauses: the number of clauses in the original formula
- *
- */
 void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
 	vector<int>* curr_clause;
 

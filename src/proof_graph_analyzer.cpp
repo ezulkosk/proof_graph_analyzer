@@ -52,6 +52,50 @@ void growTo(vector<double>& v, int s){
 	}
 }
 
+// check if 2 clauses have a conflicting literal
+bool canBeResolved(vector<int>& l, vector<int>& r){
+	unsigned ni = 0;
+	unsigned nj = 0;
+	vector<int> r2(r.size());
+	for(int i = 0; i < r2.size(); i++)
+		r2[i] = -r[r2.size() - 1 - i];
+	while(ni < l.size() && nj < r2.size()){
+		if(l[ni] == r2[nj]){
+			return true;
+		}
+		else if(ni == l.size() || nj == r2.size())
+			break;
+		else if(l[ni] < r2[nj])
+			ni++;
+		else
+			nj++;
+	}
+	return false;
+}
+
+// counts the number of merges that occur between two clauses
+// assumes clauses are sorted by read_graph()
+int numMerges(vector<int>& l, vector<int>& r){
+	unsigned ni = 0;
+	unsigned nj = 0;
+	int merges = 0;
+	while(ni < l.size() && nj < r.size()){
+		if(l[ni] == r[nj]){
+			merges++;
+			ni++;
+			nj++;
+		}
+		else if(ni == l.size() || nj == r.size())
+			break;
+		else if(l[ni] < r[nj])
+			ni++;
+		else
+			nj++;
+	}
+	return merges;
+}
+
+
 
 static double gini(vector<double> vals){
 	for(int i = 0; i < vals.size() - 1; i++){
@@ -303,21 +347,23 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 			vector<int> cj = clauses[j];
 
 			sizeOfAllDeps += cj.size();
-			// assumes clauses are sorted by read_graph()
-			unsigned ni = 0;
-			unsigned nj = 0;
-			while(ni < ci.size() && nj < cj.size()){
-				if(ci[ni] == cj[nj]){
-					merge_count++;
-					ni++;
-					nj++;
+			if(canBeResolved(ci, cj)){
+				// assumes clauses are sorted by read_graph()
+				unsigned ni = 0;
+				unsigned nj = 0;
+				while(ni < ci.size() && nj < cj.size()){
+					if(ci[ni] == cj[nj]){
+						merge_count++;
+						ni++;
+						nj++;
+					}
+					else if(ni == ci.size() || nj == cj.size())
+						break;
+					else if(ci[ni] < cj[nj])
+						ni++;
+					else
+						nj++;
 				}
-				else if(ni == ci.size() || nj == cj.size())
-					break;
-				else if(ci[ni] < cj[nj])
-					ni++;
-				else
-					nj++;
 			}
 		}
 	}
@@ -366,8 +412,6 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 	clauseVarPop /= clause.size();
 	double worst2VarPops = worstVarPop + secondWorstVarPop;
 	double worst2LitPops = worstLitPop + secondWorstLitPop;
-
-
 
 
 	log<<index<<","
@@ -686,6 +730,47 @@ void proofSpatialLocality(vector< vector<int> >& clauses,
 	proofAnalysesFile<<"GiniCmtyClausesNormalizedBySize,"<<gini(cmtyClausesNormalized)<<endl;
 }
 
+
+// output the merge locality of the proof clauses
+void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& clauses, ofstream& proofAnalysesFile){
+	// for each clause in the proof, output how many merges occur between resolvable clauses of its deps
+	int merges = 0;
+	double mergesNormalizedByNumDeps = 0;
+	int pf_size = 0;
+	long numDeps = 0;
+	for(int i = 0; i < clauses.size(); i++){
+		int curr_merges = 0;
+		vector<int> learnt = clauses[i];
+		vector<int> deps = graph[i];
+		if(learnt.size() == 0 && i != 0)
+			continue;
+		pf_size++;
+		for(int j = 0; j < ((int)deps.size()) - 1; j++){
+			vector<int> dj = clauses[deps[j]];
+			for(int k = j + 1; k < ((int) deps.size()); k++){
+				vector<int> dk = clauses[deps[k]];
+				if(canBeResolved(dj, dk)){
+					int m = numMerges(dj, dk);
+					merges += m;
+					curr_merges += m;
+				}
+			}
+		}
+		if(deps.size() > 0){
+			mergesNormalizedByNumDeps += (double) curr_merges / deps.size();
+			numDeps += deps.size();
+		}
+	}
+
+	proofAnalysesFile<<"Merges," << merges<<endl;
+	proofAnalysesFile<<"MergLocalityAverage,"<<((double) merges) / pf_size<<endl;
+	proofAnalysesFile<<"MergLocalityNormalizedByNumDeps,"<<mergesNormalizedByNumDeps / pf_size<<endl;
+	proofAnalysesFile<<"AverageDeps,"<<(double)numDeps / pf_size<<endl;
+
+
+}
+
+
 int main(int argc, char * argv[]) {
 	vector< pair<int, int> > units; // (unit, unit_id) pairs
 	vector< vector<int> > graph; // each index corresponds to a node, each element of graph[i] corresponds to deps[i]
@@ -735,6 +820,9 @@ int main(int argc, char * argv[]) {
 	proofAnalysesFile.open(proof_analyses_file);
 	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file, proofAnalysesFile);
 	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proofAnalysesFile);
+
+	proofMergeLocality(graph, clauses, proofAnalysesFile);
+
 
 	proofAnalysesFile.close();
 
