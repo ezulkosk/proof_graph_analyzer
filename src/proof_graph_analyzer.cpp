@@ -165,6 +165,7 @@ void read_graph(char* file,
 		vector< vector<int> >& graph,
 		vector< vector<int> >& clauses,
 		vector< pair<int, int> >& units,
+		vector<int>& lbd,
 		int& nOrigVars,
 		int& nOrigClauses){
 	int num;
@@ -174,6 +175,7 @@ void read_graph(char* file,
 	vector<int>* curr_clause;
 	graph.push_back(*final_deps);
 	clauses.push_back(dummy);
+	lbd.push_back(0);
 
 	cout << file << endl;
 
@@ -199,6 +201,10 @@ void read_graph(char* file,
 				curr_clause = new vector<int>;
 				mode++;
 			}
+			graph_file >> num;
+			lbd.push_back(num);
+			graph_file >> num;
+			assert(num == 0);
 		}
 		else if(!num){
 			if(mode == MODE_LITS){
@@ -261,7 +267,7 @@ void read_graph(char* file,
 /**
  * Records many properties of the clause at the given index
  */
-void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector< int >& cmty,
+void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& lbd, vector< int >& cmty,
 		set<int>& seen, int proofClauseUsesIndex, vector<double>& var_pop, vector<double>& lit_pop, int index, ofstream& log){
 	int useful = 1;
 	if(seen.find(index) == seen.end())
@@ -417,6 +423,7 @@ void logClauseProperties(vector< vector<int> >& graph, vector< vector<int> >& cl
 	log<<index<<","
 			<<useful<<","
 			<<proofClauseUsesIndex<<","
+			<<lbd[index]<<","
 			<<size<<","
 			<<cmtySpan<<","
 			<<weightedCmtySpan<<","
@@ -500,7 +507,7 @@ void getProofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& claus
  * @param graph: the DAG of the proof clause IDs, where ID = 0 is the root conflict
  * @param clauses: stores the literals in each clause starting with ID = 1
  */
-void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& cmty,
+void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& lbd, vector<int>& cmty,
 		vector<int>& proofClauseUses, vector<double>& var_pop, vector<double>& lit_pop, char* clausePropertiesFile){
 	vector<int> workpool;
 	set<int> seen;
@@ -538,12 +545,12 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 
 
 	clausePropertiesLog.open(clausePropertiesFile);
-	clausePropertiesLog<<"id,useful,uses,size,cmty_span,weighted_cmty_span,time_span_of_oldest_dep,"<<
+	clausePropertiesLog<<"id,useful,uses,lbd,size,cmty_span,weighted_cmty_span,time_span_of_oldest_dep,"<<
 			"avg_time_span_of_deps,set_of_vars_in_deps_size,total_deps,popularity_of_vars,"<<
 			"popularity_of_literals,var_pop_worst2,lit_pop_worst2,merge_ratio"<<endl;
 
 	for(int i = 1; i < graph.size(); i++){
-		logClauseProperties(graph, clauses, cmty, seen, proofClauseUses[i], var_pop, lit_pop, i, clausePropertiesLog);
+		logClauseProperties(graph, clauses, lbd, cmty, seen, proofClauseUses[i], var_pop, lit_pop, i, clausePropertiesLog);
 	}
 	clausePropertiesLog.close();
 
@@ -763,8 +770,8 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 	}
 
 	proofAnalysesFile<<"Merges," << merges<<endl;
-	proofAnalysesFile<<"MergLocalityAverage,"<<((double) merges) / pf_size<<endl;
-	proofAnalysesFile<<"MergLocalityNormalizedByNumDeps,"<<mergesNormalizedByNumDeps / pf_size<<endl;
+	proofAnalysesFile<<"MergeLocalityAverage,"<<((double) merges) / pf_size<<endl;
+	proofAnalysesFile<<"MergeLocalityNormalizedByNumDeps,"<<mergesNormalizedByNumDeps / pf_size<<endl;
 	proofAnalysesFile<<"AverageDeps,"<<(double)numDeps / pf_size<<endl;
 
 
@@ -775,6 +782,7 @@ int main(int argc, char * argv[]) {
 	vector< pair<int, int> > units; // (unit, unit_id) pairs
 	vector< vector<int> > graph; // each index corresponds to a node, each element of graph[i] corresponds to deps[i]
 	vector< vector<int> > proof;
+	vector<int> lbd;
 	vector<int> proofClauseUses; // for each index i, maps how many times clause_i was used to derive another clause
 	vector< vector<int> > clauses;
 	vector<int> clauseUses; // TODO use
@@ -802,14 +810,14 @@ int main(int argc, char * argv[]) {
 	int nProofEdges = 0;
 
 
-	read_graph(graph_file, graph, clauses, units, nOrigVars, nOrigClauses);
+	read_graph(graph_file, graph, clauses, units, lbd, nOrigVars, nOrigClauses);
 	growTo(var_pop, nOrigVars+1);
 	growTo(lit_pop, (nOrigVars+1) * 2);
 	get_var_and_lit_popularity(graph, clauses, var_pop, lit_pop);
 
 	read_cmtys(cmty_file, cmty, cmty_picks, cmty_size, cmty_clauses);
 
-	graph_to_proof(graph, clauses, cmty, proofClauseUses, var_pop, lit_pop, clause_properties_file);
+	graph_to_proof(graph, clauses, lbd, cmty, proofClauseUses, var_pop, lit_pop, clause_properties_file);
 
 	convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 
