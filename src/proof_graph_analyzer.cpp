@@ -14,7 +14,7 @@
 #include <set>
 #include <utility>
 #include <vector>
-
+#include <math.h>
 
 using namespace std;
 
@@ -777,6 +777,38 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 
 }
 
+void compareInputPopWithProofPop(vector< vector<int> >& graph,
+		vector< vector<int> >& clauses,
+		vector<double>& var_pop,
+		ofstream& proofAnalysesFile){
+	vector<double> proof_pop;
+	growTo(proof_pop, var_pop.size());
+	cout<<"IN comp\n";
+	// i = 0 is the final conflict
+	for(int i = 1; i < graph.size(); i++){
+		if(clauses[i].size() != 0){
+			// the clause is involved in the proof
+			vector<int> clause = clauses[i];
+			for(auto l : clause){
+				if(l < 0){
+					l = abs(l);
+					proof_pop[l]++;
+				}
+				else{
+					proof_pop[l]++;
+				}
+			}
+		}
+	}
+	normalize_vector(proof_pop);
+	double total_diff = 0;
+	for(int i = 0; i < var_pop.size(); i++){
+		total_diff += fabs(var_pop[i] - proof_pop[i]);
+	}
+	proofAnalysesFile<<"NormalizedInputAndProofPopDiff,"<<total_diff/var_pop.size()<<endl;
+
+
+}
 
 int main(int argc, char * argv[]) {
 	vector< pair<int, int> > units; // (unit, unit_id) pairs
@@ -792,17 +824,14 @@ int main(int argc, char * argv[]) {
 	vector<double> lit_pop; // +i at index 2i, -i at index 2i - 1
 
 
-	if(argc < 6){
-		cout << "USAGE: ./proof_graph_analyzer graph_file cnf_cmty_file graph_cnf_out_file proof_out_file proof_clause_uses_file proof_analyses_file" << endl;
+	if(argc < 3){
+		cout << "USAGE: ./proof_graph_analyzer graph_file cnf_cmty_file proof_analyses_file clause_properties file" << endl;
 		return 1;
 	}
 	char* graph_file = argv[1];
 	char* cmty_file = argv[2]; // cmtys of the original formula (zero-based)
-	char* graph_cnf_file = argv[3];
-	char* proof_out_file = argv[4];
-	char* proof_clause_uses_file = argv[5];
-	char* proof_analyses_file = argv[6];
-	char* clause_properties_file = argv[7];
+	char* proof_analyses_file = argv[3];
+	char* clause_properties_file = argv[4];
 
 	int nOrigVars = 0;
 	int nOrigClauses = 0;
@@ -819,9 +848,9 @@ int main(int argc, char * argv[]) {
 
 	graph_to_proof(graph, clauses, lbd, cmty, proofClauseUses, var_pop, lit_pop, clause_properties_file);
 
-	convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
+	//convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 
-	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
+	//convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
 	//getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
 
 	ofstream proofAnalysesFile;
@@ -830,6 +859,9 @@ int main(int argc, char * argv[]) {
 	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proofAnalysesFile);
 
 	proofMergeLocality(graph, clauses, proofAnalysesFile);
+
+	compareInputPopWithProofPop(graph, clauses, var_pop, proofAnalysesFile);
+
 
 
 	proofAnalysesFile.close();

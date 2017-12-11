@@ -4,11 +4,8 @@
 #graph_features="/home/ezulkosk/git/proof_graph_analyzer/features_s"
 
 base_dir=$1
-maplesat=$2
-proof_graph=$3
-graph_features=$4
-cnf_file=$5
-cmty_file=$6
+proof_graph=$2
+cmty_file=$3
 
 for i in graph cmty 
 do
@@ -28,8 +25,8 @@ echo $name
 # dump the graph_cnf
 if grep -q "^0" ${base_dir}/graph/${name}.proof_graph; then
     echo "Graph complete for ${base_dir}/${name}"
-    echo ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.graph_cnf ${base_dir}/graph/${name}.proof_cnf ${base_dir}/graph/${name}.proof_clauses_uses ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
-    ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.graph_cnf ${base_dir}/graph/${name}.proof_cnf ${base_dir}/graph/${name}.proof_clauses_uses ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
+    echo ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
+    ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
 
     #${base_dir}/graph_cnf/${name}.graph_cnf
     #mv /home/ezulkosk/${name}.graph_cnf.${seed} ${base_dir}/graph/${name}.graph_cnf

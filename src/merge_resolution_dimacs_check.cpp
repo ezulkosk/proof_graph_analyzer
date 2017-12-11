@@ -119,21 +119,65 @@ void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
 
 }
 
-long compute_num_merges(vector< vector<int> > clauses){
+
+// checks if resolvable clauses are merges in a cmty-based fashion
+// if 1/n of a clause is in a cmty, count that fraction toward the community, both for clause count and merges
+
+long compute_num_merges(vector< vector<int> >& clauses,
+		vector<int>& cmty,
+		vector<double>& cmty_merges,
+		vector<double>& cmty_resolutions){
 	long num_merges = 0;
 	for(int i = 0; i < clauses.size() - 1; i++){
 		vector<int> ci = clauses[i];
+
 		for(int j = i + 1; j < clauses.size(); j++){
 			vector<int> cj = clauses[j];
+
 			// assumes clauses are sorted by read_dimacs()
+			// check first if there is a resolution between the clauses
 			unsigned ni = 0;
 			unsigned nj = 0;
+			bool canResolve = false;
+			vector<int> cj2(cj.size());
+			for(int k = 0; k < cj2.size(); k++)
+				cj2[k] = -cj[cj.size() - 1 - k];
+			while(ni < ci.size() && nj < cj2.size()){
+				if(ci[ni] == cj2[nj]){
+					canResolve = true;
+					break;
+				}
+				else if(ni == ci.size() || nj == cj2.size())
+					break;
+				else if(ci[ni] < cj2[nj])
+					ni++;
+				else
+					nj++;
+			}
+			if(!canResolve)
+				continue;
+			// add to cmty_resolutions
+			for(auto l: ci){
+				cmty_resolutions[cmty[abs(l)]] += 1 / ((double) ci.size());
+			}
+			for(auto l: cj){
+				cmty_resolutions[cmty[abs(l)]] += 1 / ((double) cj.size());
+			}
 
+
+			ni = 0;
+			nj = 0;
 			while(ni < ci.size() && nj < cj.size()){
 				if(ci[ni] == cj[nj]){
 					num_merges++;
 					ni++;
 					nj++;
+					for(auto l: ci){
+						cmty_merges[cmty[abs(l)]] += 1 / ((double) ci.size());
+					}
+					for(auto l: cj){
+						cmty_merges[cmty[abs(l)]] += 1 / ((double) cj.size());
+					}
 				}
 				else if(ni == ci.size() || nj == cj.size())
 					break;
@@ -153,16 +197,40 @@ long compute_num_merges(vector< vector<int> > clauses){
 
 int main(int argc, char * argv[]) {
 	vector< vector<int> > clauses;
+	vector<int> cmty;
+	vector<int> cmty_picks;
+	vector<int> cmty_size;
+	vector<double> cmty_clauses;
+	vector<double> cmty_merges;
+	vector<double> cmty_resolutions;
 
-	if(argc < 2){
-		cout << "USAGE: ./proof_graph_analyzer cnf_file" << endl;
+	if(argc < 3){
+		cout << "USAGE: ./proof_graph_analyzer cnf_file cmty_file" << endl;
 		return 1;
 	}
 	char* dimacs_file = argv[1];
+	char* cmty_file = argv[2];
 
 	read_dimacs(dimacs_file, clauses);
+	read_cmtys(cmty_file, cmty, cmty_picks, cmty_size, cmty_clauses);
 
-	long num_pairwise_merges = compute_num_merges(clauses);
+	// add to cmty_clauses
+	for(auto c: clauses){
+		for(auto l: c){
+			cmty_clauses[cmty[abs(l)]] += 1 / ((double) c.size());
+		}
+	}
+
+
+	growTo(cmty_merges, cmty_clauses.size());
+	growTo(cmty_resolutions, cmty_clauses.size());
+
+	long num_pairwise_merges = compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions);
+	printf("cmty clauses resolutions merges\n");
+	for(int i = 0; i < cmty_clauses.size(); i++){
+		printf("%d %8.4f %8.4f %8.4f\n", i, cmty_clauses[i], cmty_resolutions[i], cmty_merges[i]);
+	}
+
 	/*
 	for(auto c : clauses){
 		for(int i : c)
