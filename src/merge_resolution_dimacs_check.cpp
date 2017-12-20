@@ -59,6 +59,21 @@ void growTo(vector<double>& v, int s){
 	}
 }
 
+void growTo(vector<vector <vector<int>*> >& v, int s){
+	if(v.size() < s){
+		for(int i = v.size(); i < s; i++){
+			vector< vector<int>* >* t = new vector<vector<int>* >;
+			v.push_back(*t);
+		}
+	}
+}
+
+int toLit(int i){
+	if(i > 0)
+		return 2*i;
+	else
+		return 2*-i+1;
+}
 
 
 void read_cmtys(char* cmty_file,
@@ -110,6 +125,30 @@ void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
 	while(stream >> num){
 		if(num == 0){
 			std::sort(curr_clause->begin(), curr_clause->end());
+			for(int i = 0; i < curr_clause->size() - 1; i++){
+				if(curr_clause->at(i) == curr_clause->at(i+1))
+					cout<<"HIT!\n";
+			}
+			int low = 0;
+			int high = curr_clause->size()-1;
+			while(low < high){
+				if(curr_clause->at(low) == curr_clause->at(high)){
+					cout<<"HIT2!\n";
+				}
+				else if(curr_clause->at(low) > 0 || curr_clause->at(high) < 0)
+					break;
+				else if(abs(curr_clause->at(low)) > curr_clause->at(high))
+					low++;
+				else
+					high--;
+			}
+			for(int i = 0; i < curr_clause->size() - 1; i++){
+				if(curr_clause->at(i) == curr_clause->at(i+1))
+					cout<<"HIT!\n";
+			}
+
+
+
 			clauses.push_back(*curr_clause);
 			curr_clause = new vector<int>;
 		}
@@ -195,6 +234,68 @@ void compute_num_merges(vector< vector<int> >& clauses,
 }
 
 
+void compute_num_merges2(vector< vector<int> >& clauses,
+		vector<int>& cmty,
+		vector< vector< vector<int>* > >& var_inclusion,
+		vector<double>& cmty_merges,
+		vector<double>& cmty_resolutions,
+		long& num_merges,
+		long& num_resolutions){
+
+	for(int i = 2; i < var_inclusion.size(); i+=2){
+		num_resolutions += var_inclusion[i].size() * var_inclusion[i+1].size();
+		for(int j = 0; j < var_inclusion[i].size(); j++){
+			for(auto l: *(var_inclusion[i][j])){
+				cmty_resolutions[cmty[abs(l)]] += var_inclusion[i+1].size() / ((double) (*var_inclusion[i][j]).size());
+			}
+		}
+		for(int j = 0; j < var_inclusion[i+1].size(); j++){
+			for(auto l: *(var_inclusion[i+1][j])){
+				cmty_resolutions[cmty[abs(l)]] += var_inclusion[i].size() / ((double) (*var_inclusion[i+1][j]).size());
+			}
+		}
+
+		int ni = 0;
+		int nj = 0;
+		for(int j = 0; j < var_inclusion[i].size(); j++){
+			for(int k = 0; k < var_inclusion[i+1].size(); k++){
+				vector<int> ci = *var_inclusion[i][j];
+				vector<int> cj = *var_inclusion[i+1][k];
+				ni = 0;
+				nj = 0;
+				while(ni < ci.size() && nj < cj.size()){
+					if(ci[ni] == cj[nj]){
+						num_merges++;
+						ni++;
+						nj++;
+						for(auto l: ci){
+							cmty_merges[cmty[abs(l)]] += 1 / ((double) ci.size());
+						}
+						for(auto l: cj){
+							cmty_merges[cmty[abs(l)]] += 1 / ((double) cj.size());
+						}
+					}
+					else if(ni == ci.size() || nj == cj.size())
+						break;
+					else if(ci[ni] < cj[nj])
+						ni++;
+					else
+						nj++;
+				}
+
+			}
+		}
+
+
+	}
+
+	cout<<num_resolutions<<endl;
+	return;
+}
+
+
+
+
 int main(int argc, char * argv[]) {
 	vector< vector<int> > clauses;
 	vector<int> cmty;
@@ -203,6 +304,8 @@ int main(int argc, char * argv[]) {
 	vector<double> cmty_clauses;
 	vector<double> cmty_merges;
 	vector<double> cmty_resolutions;
+	vector< vector< vector<int>* > > var_inclusion; // for each literal, include a pointer to all clauses containing it
+
 
 	if(argc < 4){
 		cout << "USAGE: ./proof_graph_analyzer cnf_file cmty_file out_file" << endl;
@@ -223,6 +326,52 @@ int main(int argc, char * argv[]) {
 		}
 	}
 
+	// create maps from each literal to the clauses that contain that literal
+	growTo(var_inclusion, (cmty.size()+2)*2);
+	for(int i = 0; i < clauses.size(); i++){
+		vector<int>* c = &(clauses[i]);
+		for(auto l: *c){
+			//cout<<toLit(l)<<endl;
+			assert(toLit(l) < var_inclusion.size());
+			//cout<<var_inclusion[toLit(l)].size()<< " "<<var_inclusion[toLit(-l)].size()<<endl;
+
+			var_inclusion[toLit(l)].push_back(c);
+			//print_vector(*var_inclusion[toLit(l)][0]);
+			//print_vector(*var_inclusion[toLit(l)][0]);
+			//print_vector(*var_inclusion[toLit(l)][0]);
+
+
+		}
+	}
+
+	//assert(toLit(431) == 862);
+	//print_vector(*var_inclusion[toLit(431)][0]);
+	//exit(1);
+
+	//exit(1);
+	/*
+	for(int i = 2; i < var_inclusion.size(); i+=2){
+		cout<<"A "<<var_inclusion[i].size()<< " "<<var_inclusion[i+1].size()<<endl;
+		if(var_inclusion[i].size() > 0)
+			print_vector(*var_inclusion[i][0]);
+		if(var_inclusion[i+1].size() > 0)
+			print_vector(*var_inclusion[i+1][0]);
+
+		for(int j = 0; j < var_inclusion[i].size(); j++){
+			for(int k = 0; k < var_inclusion[i+1].size(); k++){
+				//cout<<"-------\n";
+				//cout<<var_inclusion[i].size()<< " "<<var_inclusion[i+1].size()<<endl;
+				//print_vector(*var_inclusion[i][j]);
+				//print_vector(*var_inclusion[i+1][k]);
+			}
+		}
+	}
+
+	exit(1);
+	*/
+
+
+
 
 	growTo(cmty_merges, cmty_clauses.size());
 	growTo(cmty_resolutions, cmty_clauses.size());
@@ -233,7 +382,9 @@ int main(int argc, char * argv[]) {
 	long num_merges = 0;
 	long num_resolutions = 0;
 
-	compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
+	//compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
+	compute_num_merges2(clauses, cmty, var_inclusion, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
+
 	printf("cmty clauses resolutions merges\n");
 	for(int i = 0; i < cmty_clauses.size(); i++){
 		printf("%d %8.4f %8.4f %8.4f\n", i, cmty_clauses[i], cmty_resolutions[i], cmty_merges[i]);

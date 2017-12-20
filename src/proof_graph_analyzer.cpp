@@ -554,18 +554,39 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 	}
 	clausePropertiesLog.close();
 
+	// compute 1) the number of useless input clauses;
+	// 2) the number of useless clauses with no useless deps but have useful deps (but not input clauses)
+	int num_useless_input = 0;
+	int num_useless_fringe = 0; //if we cut these, the other useless clauses are disconnected from the proofs
 
 	// delete entries from the graph that were never seen
 	int delete_count = 0;
 	for(int i = 0; i < graph.size(); i++){
 		if(seen.find(i) == seen.end()){
 			delete_count++;
+			if(graph[i].empty()){
+				num_useless_input++;
+			}
+			else{
+				for(int j = 0; j < graph[i].size(); j++){
+					if(seen.find(graph[i][j]) != seen.end()){
+						num_useless_fringe++;
+						break;
+					}
+				}
+			}
+
+
 			graph[i].clear();
 			clauses[i].clear();
 		}
 	}
 	cout<<"Count: "<<count << "/" <<graph.size()<<endl;
 	cout<<"Deleted: "<<delete_count << "/" <<graph.size()<<endl;
+	cout<<"UselessInput: "<<num_useless_input << "/" <<delete_count<<endl;
+	cout<<"FringeUseless: "<<num_useless_fringe << "/" <<delete_count<<endl;
+	cout<<"CuttableUseless: "<<(delete_count - num_useless_fringe - num_useless_input) << "/" <<delete_count<<endl;
+
 
 }
 
