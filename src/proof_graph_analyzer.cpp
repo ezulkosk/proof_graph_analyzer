@@ -898,7 +898,7 @@ int main(int argc, char * argv[]) {
 	vector<double> cmty_clauses;
 	vector<double> var_pop;
 	vector<double> lit_pop; // +i at index 2i, -i at index 2i - 1
-
+	set<int> seen;
 
 	if(argc < 3){
 		cout << "USAGE: ./proof_graph_analyzer graph_file cnf_cmty_file proof_analyses_file clause_properties file" << endl;
@@ -940,7 +940,7 @@ int main(int argc, char * argv[]) {
 	//convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 
 	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
-	//getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
+	getProofClauseUses(graph, clauses, seen, proofClauseUses);
 
 
 	cout<<"after\n";
