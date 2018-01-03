@@ -12,7 +12,7 @@ do
     mkdir -p ${base_dir}/${i}
 done	
 
-name=`basename $cnf_file .cnf`
+name=`basename $cmty_file .cmty`
 echo $name
 
 # get the cmty structure data for the cnf
@@ -26,7 +26,7 @@ echo $name
 if grep -q "^0" ${base_dir}/graph/${name}.proof_graph; then
     echo "Graph complete for ${base_dir}/${name}"
     echo ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
-    ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties
+    ${proof_graph} ${base_dir}/graph/${name}.proof_graph $cmty_file ${base_dir}/graph/${name}.proof_analyses ${base_dir}/graph/${name}.clause_properties ${base_dir}/graph/${name}.proof_dimacs
 
     #${base_dir}/graph_cnf/${name}.graph_cnf
     #mv /home/ezulkosk/${name}.graph_cnf.${seed} ${base_dir}/graph/${name}.graph_cnf

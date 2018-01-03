@@ -16,6 +16,8 @@
 #include <vector>
 #include <math.h>
 
+#include "tools.h"
+
 using namespace std;
 
 
@@ -541,9 +543,9 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 		}
 	}
 
-	getProofClauseUses(graph, clauses, seen, proofClauseUses);
+	//getProofClauseUses(graph, clauses, seen, proofClauseUses);
 
-
+	/*
 	clausePropertiesLog.open(clausePropertiesFile);
 	clausePropertiesLog<<"id,useful,uses,lbd,size,cmty_span,weighted_cmty_span,time_span_of_oldest_dep,"<<
 			"avg_time_span_of_deps,set_of_vars_in_deps_size,total_deps,popularity_of_vars,"<<
@@ -553,6 +555,7 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 		logClauseProperties(graph, clauses, lbd, cmty, seen, proofClauseUses[i], var_pop, lit_pop, i, clausePropertiesLog);
 	}
 	clausePropertiesLog.close();
+	*/
 
 	// compute 1) the number of useless input clauses;
 	// 2) the number of useless clauses with no useless deps but have useful deps (but not input clauses)
@@ -624,14 +627,22 @@ void convert_proof_to_dimacs_format(vector<vector<int> >& graph, vector<vector<i
 	ofstream file;
 	file.open (dimacs_out_file);
 
+	nProofNodes = 0;
+	for(int i = 1; i < graph.size(); i++){
+			if(clauses[i].size() > 0)
+				nProofNodes++;
+	}
+
 	file<<"p cnf " << nOrigVars << " " << nProofNodes <<endl;
-	for(int i = 0; i < graph.size(); i++){
+	for(int i = 1; i < graph.size(); i++){
 		if(clauses[i].size() > 0 || i == 0){
 			for(auto j: clauses[i])
 				file<<j << " ";
 			file<<"0"<<endl;
 		}
 	}
+
+
 	file.close();
 }
 
@@ -801,9 +812,12 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 void compareInputPopWithProofPop(vector< vector<int> >& graph,
 		vector< vector<int> >& clauses,
 		vector<double>& var_pop,
+		vector<double>& lit_pop,
 		ofstream& proofAnalysesFile){
 	vector<double> proof_pop;
+	vector<double> proof_lit_pop;
 	growTo(proof_pop, var_pop.size());
+	growTo(proof_lit_pop, lit_pop.size());
 	cout<<"IN comp\n";
 	// i = 0 is the final conflict
 	for(int i = 1; i < graph.size(); i++){
@@ -814,22 +828,63 @@ void compareInputPopWithProofPop(vector< vector<int> >& graph,
 				if(l < 0){
 					l = abs(l);
 					proof_pop[l]++;
+					proof_lit_pop[(2*l)-1]++;
 				}
 				else{
 					proof_pop[l]++;
+					proof_lit_pop[2*l]++;
 				}
 			}
 		}
 	}
 	normalize_vector(proof_pop);
-	double total_diff = 0;
+	normalize_vector(proof_lit_pop);
+	double var_amt = 0;
 	for(int i = 0; i < var_pop.size(); i++){
-		total_diff += fabs(var_pop[i] - proof_pop[i]);
+		var_amt += fabs((var_pop[i] - proof_pop[i]) * (var_pop[i] - proof_pop[i]));
 	}
-	proofAnalysesFile<<"NormalizedInputAndProofPopDiff,"<<total_diff/var_pop.size()<<endl;
+
+	double lit_amt = 0;
+	for(int i = 0; i < lit_pop.size(); i++){
+		lit_amt += fabs((lit_pop[i] - proof_lit_pop[i]) * (lit_pop[i] - proof_lit_pop[i]));
+	}
+
+	//proofAnalysesFile<<"NormalizedInputAndProofPopDiff,"<<total_diff/var_pop.size()<<endl;
+	proofAnalysesFile<<"VarPopProofMSE,"<<sqrt(var_amt)<<endl;
+	proofAnalysesFile<<"LitPopProofMSE,"<<sqrt(lit_amt)<<endl;
 
 
 }
+
+double fixed_cmty_modularity(Graph* g, vector <int>& n2c) {
+//-------------------------------------------------------------------------------------------
+// Given the graph "g" and the partition "n2c" computes the modularity
+//-------------------------------------------------------------------------------------------
+	double w = 0;
+	double arity = 0;
+	vector <double> aritym(g->size(), 0);
+
+	//std::cout<<"arity: " << g->size()<<std::endl;
+	for (Graph::EdgeIter it=g->begin(); it != g->end(); it++) {
+		//assert(it->orig >= 0 && it->orig < n2c.size());
+		//assert(it->dest >= 0 && it->dest < n2c.size());
+		//std::cout<<it->orig<<std::endl;
+		//std::cout<< it->orig<< " " << it->dest <<std::endl;
+		if (n2c[it->orig] == n2c[it->dest])
+			w += it->weight;
+	}
+
+	for (int i=0; i<g->size(); i++)
+		aritym[n2c[i]] += g->arity(i);
+
+	for (int i=0; i<g->size(); i++)
+		arity += aritym[i] * aritym[i] / g->arity() / g->arity();
+
+
+//  cerr <<" Modularity = "<<w / g->arity()<<" - "<<arity<<" = "<<w / g->arity() - arity<<endl;
+	return 2*w / g->arity() - arity;
+}
+
 
 int main(int argc, char * argv[]) {
 	vector< pair<int, int> > units; // (unit, unit_id) pairs
@@ -853,6 +908,7 @@ int main(int argc, char * argv[]) {
 	char* cmty_file = argv[2]; // cmtys of the original formula (zero-based)
 	char* proof_analyses_file = argv[3];
 	char* clause_properties_file = argv[4];
+	char* proof_out_file = argv[5];
 
 	int nOrigVars = 0;
 	int nOrigClauses = 0;
@@ -866,13 +922,29 @@ int main(int argc, char * argv[]) {
 	get_var_and_lit_popularity(graph, clauses, var_pop, lit_pop);
 
 	read_cmtys(cmty_file, cmty, cmty_picks, cmty_size, cmty_clauses);
+	//<Graph*,Graph*> p = readFormula("/home/ezulkosk/cp2017_benchmarks/agile/simp/cnf/bench_8784.smt2.cnf", 400);
+	//Graph* vig = p.first;
+
+	vector<int> n2c;
+	for(int i = 1; i < cmty.size(); i++){
+		n2c.push_back(cmty[i]);
+	}
+
+	//double q = fixed_cmty_modularity(vig, n2c);
+	//cout<<q<<endl;
+
+	//cout<<"after\n";
 
 	graph_to_proof(graph, clauses, lbd, cmty, proofClauseUses, var_pop, lit_pop, clause_properties_file);
 
 	//convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 
-	//convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
+	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
 	//getProofClauseUses(graph, clauses, proofClauseUses, proof_clause_uses_file, nProofNodes);
+
+
+	cout<<"after\n";
+
 
 	ofstream proofAnalysesFile;
 	proofAnalysesFile.open(proof_analyses_file);
@@ -881,11 +953,17 @@ int main(int argc, char * argv[]) {
 
 	proofMergeLocality(graph, clauses, proofAnalysesFile);
 
-	compareInputPopWithProofPop(graph, clauses, var_pop, proofAnalysesFile);
+	compareInputPopWithProofPop(graph, clauses, var_pop, lit_pop, proofAnalysesFile);
 
+	pair<Graph*,Graph*> p = readFormula(proof_out_file, 400);
+	Graph* vig = p.first;
+	double q = fixed_cmty_modularity(vig, n2c);
+	cout<<q<<endl;
+	proofAnalysesFile<<"ProofModularityOriginalPartition,"<<q<<endl;
 
 
 	proofAnalysesFile.close();
+
 
 	/*
 	for(auto c : clauses){
