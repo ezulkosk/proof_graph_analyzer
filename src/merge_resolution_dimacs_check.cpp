@@ -161,7 +161,7 @@ void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
 
 // checks if resolvable clauses are merges in a cmty-based fashion
 // if 1/n of a clause is in a cmty, count that fraction toward the community, both for clause count and merges
-
+/*
 void compute_num_merges(vector< vector<int> >& clauses,
 		vector<int>& cmty,
 		vector<double>& cmty_merges,
@@ -232,18 +232,21 @@ void compute_num_merges(vector< vector<int> >& clauses,
 	}
 
 }
-
+*/
 
 void compute_num_merges2(vector< vector<int> >& clauses,
 		vector<int>& cmty,
 		vector< vector< vector<int>* > >& var_inclusion,
 		vector<double>& cmty_merges,
 		vector<double>& cmty_resolutions,
+		vector<int>& var_merges,
+		vector<int>& var_resolutions,
 		long& num_merges,
 		long& num_resolutions){
 
 	for(int i = 2; i < var_inclusion.size(); i+=2){
 		num_resolutions += var_inclusion[i].size() * var_inclusion[i+1].size();
+		var_resolutions[i/2] += var_inclusion[i].size() * var_inclusion[i+1].size();
 		for(int j = 0; j < var_inclusion[i].size(); j++){
 			for(auto l: *(var_inclusion[i][j])){
 				cmty_resolutions[cmty[abs(l)]] += var_inclusion[i+1].size() / ((double) (*var_inclusion[i][j]).size());
@@ -265,6 +268,7 @@ void compute_num_merges2(vector< vector<int> >& clauses,
 				nj = 0;
 				while(ni < ci.size() && nj < cj.size()){
 					if(ci[ni] == cj[nj]){
+						var_merges[abs(ci[ni])]++;
 						num_merges++;
 						ni++;
 						nj++;
@@ -294,6 +298,21 @@ void compute_num_merges2(vector< vector<int> >& clauses,
 }
 
 
+double remap_highest(vector< vector<int> >& clauses, int highest){
+	ofstream out;
+	out.open("/home/ezulkosk/git/proof_graph_analyzer/remap.cnf");
+	for(auto c: clauses){
+		for(auto l : c){
+			if(abs(l) == highest){
+				l = abs(l);
+			}
+			out<<l<<" ";
+		}
+		out<<"0\n";
+	}
+	out.close();
+}
+
 
 
 int main(int argc, char * argv[]) {
@@ -301,6 +320,8 @@ int main(int argc, char * argv[]) {
 	vector<int> cmty;
 	vector<int> cmty_picks;
 	vector<int> cmty_size;
+	vector<int> var_merges;
+	vector<int> var_resolutions;
 	vector<double> cmty_clauses;
 	vector<double> cmty_merges;
 	vector<double> cmty_resolutions;
@@ -321,13 +342,16 @@ int main(int argc, char * argv[]) {
 
 	// add to cmty_clauses
 	for(auto c: clauses){
-		for(auto l: c){
+		for(auto l: c)
+		{
 			cmty_clauses[cmty[abs(l)]] += 1 / ((double) c.size());
 		}
 	}
 
 	// create maps from each literal to the clauses that contain that literal
 	growTo(var_inclusion, (cmty.size()+2)*2);
+	growTo(var_resolutions, cmty.size());
+	growTo(var_merges, cmty.size());
 	for(int i = 0; i < clauses.size(); i++){
 		vector<int>* c = &(clauses[i]);
 		for(auto l: *c){
@@ -383,7 +407,25 @@ int main(int argc, char * argv[]) {
 	long num_resolutions = 0;
 
 	//compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
-	compute_num_merges2(clauses, cmty, var_inclusion, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
+	compute_num_merges2(clauses, cmty, var_inclusion, cmty_merges, cmty_resolutions, var_merges, var_resolutions, num_merges, num_resolutions);
+
+	int highest = 0;
+	int high_var = 1;
+	for(int i = 1; i < var_resolutions.size(); i++){
+		if(abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size())) > highest)
+		{
+			highest = abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()));
+			high_var = i;
+		}
+		cout<<"V "<<i<<" "<<abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()))<<" "<<var_resolutions[i]<<" "<<var_merges[i]<<endl;
+	}
+	cout<<"Highest "<<high_var<<" "<<highest<<endl;
+
+	remap_highest(clauses, 16); // high_var);
+
+
+	// discuss instance of all positive literals ("counterexample of mergability")
+	// sc2 initiative
 
 	printf("cmty clauses resolutions merges\n");
 	for(int i = 0; i < cmty_clauses.size(); i++){

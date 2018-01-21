@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 #include <math.h>
-
+#include <queue>
 #include "tools.h"
 
 using namespace std;
@@ -809,6 +809,118 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 
 }
 
+
+void analyzeProofLSRPercentiles(vector< vector<int> >& graph,
+		vector< vector<int> >& clauses,
+		ofstream& proofAnalysesFile){
+	set<int> lsr_vars;
+	vector<int> lsr_over_time;
+	for(int i = 1; i < graph.size(); i++){
+		if(clauses[i].size() != 0){
+			if(graph[i].size() == 0)
+				continue;
+			else{
+				for(int j : clauses[i])
+					lsr_vars.insert(abs(j));
+				lsr_over_time.push_back(lsr_vars.size());
+			}
+		}
+	}
+	double percentile_inc = 0.25 * lsr_vars.size();
+	double percentile = percentile_inc;
+	cout<<"LSR25Checkpoints";
+	for(int i = 0; i < lsr_over_time.size(); i++){
+		if(percentile > lsr_vars.size()+1){
+			cout<<endl;
+			break;
+		}
+		if(lsr_over_time[i] >= percentile){
+			printf(",%0.7f", (double)i / lsr_over_time.size());
+			percentile += percentile_inc;
+
+		}
+	}
+	//cout<<"Percentile:"<<percentile;
+	cout<<"LSR,"<<lsr_vars.size()<<endl;
+}
+
+void analyzeProofLSRAvg(vector< vector<int> >& graph,
+		vector< vector<int> >& clauses,
+		ofstream& proofAnalysesFile){
+
+	/*
+	 * Optimization: for each clause, find it's last direct usage, record in vector
+	 *
+	 * When i exceeds the last use of a clause, delete it's associated lsr_set.
+	 */
+
+	int total_learnts = 0;
+	long total_lsr = 0;
+	long total_clause_proof_size = 0;
+
+	set<int> lsr_vars;
+	long curr_clause_proof_size = 0;
+
+	// for each clause, find it's last usage
+	vector<int> last_usage_vec;
+	map<int, vector<int> > dead_clauses;
+	for(int i = 0; i < clauses.size(); i++)
+		last_usage_vec.push_back(0);
+	for(int i = 1; i < graph.size(); i++)
+		for(int j: graph[i])
+			last_usage_vec[j] = i;
+	// store the last usages in a map
+	for(int i = 1; i < graph.size(); i++){
+		int usage = last_usage_vec[i];
+		if(dead_clauses.find(usage + 1) == dead_clauses.end()){
+			dead_clauses[usage + 1] = *(new vector<int>);
+		}
+		dead_clauses[usage + 1].push_back(i);
+	}
+	last_usage_vec.clear();
+
+	map<int, set<int> > lsr_sets;
+
+
+
+
+	for(int i = 1; i < graph.size(); i++){
+		if(dead_clauses.find(i) != dead_clauses.end()){
+			for(int j: dead_clauses[i]){
+				lsr_sets[j].clear();
+			}
+		}
+		if(clauses[i].size() != 0){
+			if(graph[i].size() == 0)
+				continue;
+			else{
+				//cout<<"PfLSR: "<<i<<endl;
+				total_learnts++;
+				//curr_clause_proof_size = 0;
+				lsr_vars.clear();
+				for(int j: clauses[i])
+					lsr_vars.insert(abs(j));
+				for(int cid: graph[i]){
+					// INV: lsr_vars are always positive, don't need to do abs() on deps.
+					for(int j : lsr_sets[cid])
+						lsr_vars.insert(j);
+				}
+				total_lsr += lsr_vars.size();
+				set<int>* curr_set = new set<int>(lsr_vars);
+				lsr_sets[i] = *curr_set;
+				//total_clause_proof_size += curr_clause_proof_size;
+
+			}
+		}
+	}
+	cout<<"TotalLSR,"<<total_lsr<<endl;
+	cout<<"LSRAvg,"<<((double) total_lsr)/total_learnts<<endl;
+	//cout<<"AverageProofSizeInClauses,"<<((double)total_clause_proof_size)/total_learnts<<endl;
+}
+
+
+
+
 void compareInputPopWithProofPop(vector< vector<int> >& graph,
 		vector< vector<int> >& clauses,
 		vector<double>& var_pop,
@@ -843,15 +955,19 @@ void compareInputPopWithProofPop(vector< vector<int> >& graph,
 	for(int i = 0; i < var_pop.size(); i++){
 		var_amt += fabs((var_pop[i] - proof_pop[i]) * (var_pop[i] - proof_pop[i]));
 	}
+	var_amt /= var_pop.size();
+	var_amt = sqrt(var_amt);
 
 	double lit_amt = 0;
 	for(int i = 0; i < lit_pop.size(); i++){
 		lit_amt += fabs((lit_pop[i] - proof_lit_pop[i]) * (lit_pop[i] - proof_lit_pop[i]));
 	}
+	lit_amt /= lit_pop.size();
+	lit_amt = sqrt(lit_amt);
 
 	//proofAnalysesFile<<"NormalizedInputAndProofPopDiff,"<<total_diff/var_pop.size()<<endl;
-	proofAnalysesFile<<"VarPopProofMSE,"<<sqrt(var_amt)<<endl;
-	proofAnalysesFile<<"LitPopProofMSE,"<<sqrt(lit_amt)<<endl;
+	proofAnalysesFile<<"VarPopProofRMSE,"<<var_amt<<endl;
+	proofAnalysesFile<<"LitPopProofRMSE,"<<lit_amt<<endl;
 
 
 }
@@ -948,6 +1064,10 @@ int main(int argc, char * argv[]) {
 
 	ofstream proofAnalysesFile;
 	proofAnalysesFile.open(proof_analyses_file);
+
+	analyzeProofLSRPercentiles(graph, clauses, proofAnalysesFile);
+	analyzeProofLSRAvg(graph, clauses, proofAnalysesFile);
+
 	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file, proofAnalysesFile);
 	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proofAnalysesFile);
 
