@@ -334,11 +334,11 @@ void intra_community_merge_res(vector< vector<int> >& clauses,
 	}
 
 
-	cout<<"i clauses res merges\n";
+	out<<"i clauses res merges\n";
 	for(int i = 0; i < num_cmtys; i++){
-		cout<<"CM "<<i<<" "<<intra_cmty_clauses[i]<<" "<<intra_cmty_res[i]<<" "<<intra_cmty_merge[i]<<endl;
+		out<<"CM "<<i<<" "<<intra_cmty_clauses[i]<<" "<<intra_cmty_res[i]<<" "<<intra_cmty_merge[i]<<endl;
 	}
-	cout<<"CMINTER "<<-1<<" "<<clauses_outside_cmtys.size()<<" "<<inter_cmty_res<<" "<<inter_cmty_merge<<endl;
+	out<<"CMINTER "<<-1<<" "<<clauses_outside_cmtys.size()<<" "<<inter_cmty_res<<" "<<inter_cmty_merge<<endl;
 
 
 
