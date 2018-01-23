@@ -68,12 +68,32 @@ void growTo(vector<vector <vector<int>*> >& v, int s){
 	}
 }
 
+
 int toLit(int i){
 	if(i > 0)
 		return 2*i;
 	else
 		return 2*-i+1;
 }
+
+
+void is_res_merge(vector<int>& c1, vector<int>& c2, bool& res, int& num_merge){
+	num_merge = 0;
+	res = false;
+	for(int i = 0; i < c1.size(); i++){
+		int l1 = c1[i];
+		for(int j = 0; j < c2.size(); j++){
+			int l2 = c2[j];
+			if(l1 == l2){
+				num_merge++;
+			}
+			else if(l1 == -l2){
+				res = true;
+			}
+		}
+	}
+}
+
 
 
 void read_cmtys(char* cmty_file,
@@ -233,6 +253,97 @@ void compute_num_merges(vector< vector<int> >& clauses,
 
 }
 */
+
+void intra_community_merge_res(vector< vector<int> >& clauses,
+		vector<int>& cmty,
+		int num_cmtys,
+		ofstream& out){
+
+	vector< vector<int> > clauses_in_cmty; // stores the indices of clauses in each cmty
+	vector<int> intra_cmty_res;
+	vector<int> intra_cmty_merge;
+	vector<int> intra_cmty_clauses;
+	vector<int> clauses_outside_cmtys;
+	long inter_cmty_res = 0;
+	long inter_cmty_merge = 0;
+
+
+	growTo(intra_cmty_res, num_cmtys);
+	growTo(intra_cmty_merge, num_cmtys);
+	growTo(intra_cmty_clauses, num_cmtys);
+
+	for(int i = 0; i <= num_cmtys; i++){
+		vector<int>* vec = new vector<int>;
+		clauses_in_cmty.push_back(*(vec));
+	}
+
+	for(int i = 0; i < clauses.size(); i++){
+		vector<int> c = clauses[i];
+		int curr_cmty = -1;
+		bool is_intra = true;
+		for(auto l: c){
+			int v = abs(l);
+			int v_cmty = cmty[v];
+			if(curr_cmty == -1)
+				curr_cmty = v_cmty;
+			else if(curr_cmty != v_cmty){
+				is_intra = false;
+				break;
+			}
+		}
+		if(is_intra && curr_cmty >= 0){
+			clauses_in_cmty[curr_cmty].push_back(i);
+			intra_cmty_clauses[curr_cmty] += 1;
+		}
+		else{
+			clauses_outside_cmtys.push_back(i);
+		}
+	}
+
+
+	for(int i = 0; i < (int)clauses_in_cmty.size(); i++){
+		for(int j = 0; j < (int)clauses_in_cmty[i].size()-1; j++){
+			vector<int> c1 = clauses[clauses_in_cmty[i][j]];
+			for(int k = j + 1; k < clauses_in_cmty[i].size(); k++){
+				vector<int> c2 = clauses[clauses_in_cmty[i][k]];
+				int num_merge;
+				bool res;
+				is_res_merge(c1, c2, res, num_merge);
+
+				if(res){
+					intra_cmty_res[i] += 1;
+					intra_cmty_merge[i] += num_merge;
+				}
+			}
+		}
+	}
+
+	for(int i = 0; i < (int)clauses_outside_cmtys.size()-1; i++){
+		vector<int> c1 = clauses[clauses_outside_cmtys[i]];
+		for(int j = i + 1; j < clauses_outside_cmtys.size(); j++){
+			vector<int> c2 = clauses[clauses_outside_cmtys[j]];
+			int num_merge;
+			bool res;
+			is_res_merge(c1, c2, res, num_merge);
+
+			if(res){
+				inter_cmty_res += 1;
+				inter_cmty_merge += num_merge;
+			}
+		}
+	}
+
+
+	cout<<"i clauses res merges\n";
+	for(int i = 0; i < num_cmtys; i++){
+		cout<<"CM "<<i<<" "<<intra_cmty_clauses[i]<<" "<<intra_cmty_res[i]<<" "<<intra_cmty_merge[i]<<endl;
+	}
+	cout<<"CMINTER "<<-1<<" "<<clauses_outside_cmtys.size()<<" "<<inter_cmty_res<<" "<<inter_cmty_merge<<endl;
+
+
+
+}
+
 
 void compute_num_merges2(vector< vector<int> >& clauses,
 		vector<int>& cmty,
@@ -409,6 +520,8 @@ int main(int argc, char * argv[]) {
 	//compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
 	compute_num_merges2(clauses, cmty, var_inclusion, cmty_merges, cmty_resolutions, var_merges, var_resolutions, num_merges, num_resolutions);
 
+	intra_community_merge_res(clauses, cmty, cmty_clauses.size(), outFile);
+
 	int highest = 0;
 	int high_var = 1;
 	for(int i = 1; i < var_resolutions.size(); i++){
@@ -417,7 +530,7 @@ int main(int argc, char * argv[]) {
 			highest = abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()));
 			high_var = i;
 		}
-		cout<<"V "<<i<<" "<<abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()))<<" "<<var_resolutions[i]<<" "<<var_merges[i]<<endl;
+		// cout<<"V "<<i<<" "<<abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()))<<" "<<var_resolutions[i]<<" "<<var_merges[i]<<endl;
 	}
 	cout<<"Highest "<<high_var<<" "<<highest<<endl;
 
