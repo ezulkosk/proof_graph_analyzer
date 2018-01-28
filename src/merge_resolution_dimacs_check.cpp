@@ -267,7 +267,6 @@ void intra_community_merge_res(vector< vector<int> >& clauses,
 	long inter_cmty_res = 0;
 	long inter_cmty_merge = 0;
 
-
 	growTo(intra_cmty_res, num_cmtys);
 	growTo(intra_cmty_merge, num_cmtys);
 	growTo(intra_cmty_clauses, num_cmtys);
@@ -339,8 +338,6 @@ void intra_community_merge_res(vector< vector<int> >& clauses,
 		out<<"CM "<<i<<" "<<intra_cmty_clauses[i]<<" "<<intra_cmty_res[i]<<" "<<intra_cmty_merge[i]<<endl;
 	}
 	out<<"CMINTER "<<-1<<" "<<clauses_outside_cmtys.size()<<" "<<inter_cmty_res<<" "<<inter_cmty_merge<<endl;
-
-
 
 }
 
