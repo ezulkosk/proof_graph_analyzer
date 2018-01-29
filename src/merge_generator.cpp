@@ -6,7 +6,21 @@
 
 
 /*
- * Checks the merge resolution statistics for a dimacs file.
+ * Takes a cnf and greedily increases merges in the formula.
+ *
+ * Defintions:
+ *   enabler literal - for a clause pair, resolution over the literal allows a merge to happen over some other literal
+ *   merge literal - there exists a clause pair that has a merge over the literal
+ *   double resolution - a clause pair resolves on two literals, and merges on a third: (a v b v c) ^ (!a v !b v c)
+ *
+ * The program takes an input CNF. The clause "skeleton" is "locked", i.e., the set of clauses remain the same,
+ * but the polarities of literals can be changed. The number of each literal is also locked, so in order to
+ * swap v to !v, !v must be swapped to v elsewhere. This ensures that the community structure and literal popularity
+ * distribution of the original instance is maintained.
+ *
+ * If a literal is an enabler or a merge, it is also locked. Perhaps this should change if it's a double resolution.
+ *
+ *
  *
  *
  */
@@ -27,6 +41,9 @@ using namespace std;
 
 
 
+bool my_comparator (int i, int j) {
+	return abs(i) < abs(j) || (abs(i) == abs(j) && i < j);
+}
 
 
 void print_vector(vector<int>& v){
@@ -50,6 +67,15 @@ void growTo(vector<int>& v, int s){
 		}
 	}
 }
+
+void growTo(vector<bool>& v, int s){
+	if(v.size() < s){
+		for(int i = v.size(); i < s; i++){
+			v.push_back(false);
+		}
+	}
+}
+
 
 void growTo(vector<double>& v, int s){
 	if(v.size() < s){
@@ -119,7 +145,7 @@ void read_cmtys(char* cmty_file,
 }
 
 
-void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
+void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses, int& nVars){
 	vector<int>* curr_clause;
 
 	std::fstream stream(dimacs_file, std::ios_base::in);
@@ -134,7 +160,7 @@ void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
 
 	}
 	// read the rest of the header
-	stream >> num;
+	stream >> nVars;
 	stream >> num;
 	curr_clause = new vector<int>;
 	while(stream >> num){
@@ -168,16 +194,19 @@ void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
 		else
 			curr_clause->push_back(num);
 	}
-
 }
 
 
 /*
  * increases enabled and merge counters for appropriate literals
+ * TODO -- Condition for positive change: the clause has no merges but has a double-res with another clause.
+ * 		   If we flip one literal, it will have a res+merge with that clause.
  */
 bool res_merge_counter(vector<int>& c1, vector<int>& c2,
 		vector<int>* e1, vector<int>* e2,
-		vector<int>* m1, vector<int>* m2){
+		vector<int>* m1, vector<int>* m2,
+		vector<bool>* lock1, vector<bool>* lock2,
+		vector< pair<int,int> >& curr_flip_pairs){
 
 	// can assume that a literal will never be both a merge and a res for the same clause pair
 	vector<int> res_indices1;
@@ -202,6 +231,7 @@ bool res_merge_counter(vector<int>& c1, vector<int>& c2,
 			}
 		}
 	}
+	bool updated = false;
 	if(res_indices1.size() > 0 && num_merges > 0){
 		// print_vector(*m1);
 		for(int i = 0; i < res_indices1.size(); i++){
@@ -212,61 +242,207 @@ bool res_merge_counter(vector<int>& c1, vector<int>& c2,
 			e2->at(res_indices2[i]) += num_merges;
 		}
 
+		if(res_indices1.size() == 1){
+			lock1->at(res_indices1[0]) = true;
+			lock2->at(res_indices2[0]) = true;
+		}
+
 		for(int i = 0; i < merge_indices1.size(); i++){
 			m1->at(merge_indices1[i])++;
+			lock1->at(merge_indices1[i]) = true;
 		}
 
 		for(int i = 0; i < merge_indices2.size(); i++){
 			m2->at(merge_indices2[i])++;
+			lock2->at(merge_indices2[i]) = true;
 		}
 		// print_vector(*m1);
-		return true;
+		updated = true;
 	}
-	return false;
+	if(res_indices1.size() > 1){
+		// create flip pairs
+		for(int i = 0; i < res_indices1.size(); i++){
+			pair<int, int> p = std::make_pair(res_indices1[i], res_indices2[i]);
+			curr_flip_pairs.push_back(p);
+		}
+		updated = true;
+	}
+	return updated;
 }
+
+
 
 
 void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		vector< vector<int> >& enabled,
-		vector< vector<int> >& merges){
+		vector< vector<int> >& merges,
+		vector< vector<bool> >& locked,
+		vector< pair< pair<int,int>, pair<int,int> > >& flip_pairs){
 
 	for(int i = 0; i < (int) clauses.size() - 1; i++){
 		vector<int> c1 = clauses[i];
 		vector<int> e1 = enabled[i];
 		vector<int> m1 = merges[i];
+		vector<bool> lock1 = locked[i];
 		for(int j = i + 1; j < (int) clauses.size(); j++){
 			vector<int> c2 = clauses[j];
 			vector<int> e2 = enabled[j];
 			vector<int> m2 = merges[j];
-			bool updated = res_merge_counter(c1, c2, &e1, &e2, &m1, &m2);
+			vector<bool> lock2 = locked[j];
+			vector< pair<int, int> > curr_flip_pairs; // does not contain clause_ids. Incorporate those after.
+			bool updated = res_merge_counter(c1, c2, &e1, &e2, &m1, &m2, &lock1, &lock2, curr_flip_pairs);
 			if(updated){
 				// print_vector(m1);
 				merges[i] = m1;
 				merges[j] = m2;
 				enabled[i] = e1;
 				enabled[j] = e2;
+				locked[i] = lock1;
+				locked[j] = lock2;
 				// cout<<"===="<<endl;
+				for(auto p: curr_flip_pairs){
+					pair<int, int> p1 = std::make_pair(i, p.first);
+					pair<int, int> p2 = std::make_pair(j, p.second);
+					pair< pair<int,int>, pair<int,int> > p3 = std::make_pair(p1, p2);
+					flip_pairs.push_back(p3);
+				}
 			}
 		}
 	}
 	cout<<endl;
+
+	map<int, pair<int, int> > unlocked_lit_locs;
 	for(int i = 0; i < clauses.size(); i++){
-			vector<int> e = enabled[i];
-			vector<int> m = merges[i];
-			for(int j = 0; j < e.size(); j++){
-				if(e[j] + m[j] == 0)
-					printf("%10d %10d %10d %10d\n", i, j, e[j], m[j]);
+		vector<int> c = clauses[i];
+		vector<bool> lock = locked[i];
+
+		for(int j = 0; j < c.size(); j++){
+			if(!lock[j]){
+				unlocked_lit_locs[c[j]] = std::make_pair(i, j);
 			}
 		}
+	}
+
+	set<int> locked_clauses;
+
+	// TODO randomize
+	int num_flips = 0;
+	for(auto p: flip_pairs){
+		int c1 = p.first.first;
+		int l1 = p.first.second;
+		int lit1 = clauses[c1][l1];
+		int c2 = p.second.first;
+		int l2 = p.second.second;
+		int lit2 = clauses[c2][l2];
+
+		// either of the clauses in the pair have been changed
+		if(locked_clauses.find(c1) != locked_clauses.end() || locked_clauses.find(c2) != locked_clauses.end())
+			continue;
+
+		if(!locked[c1][l1] && unlocked_lit_locs.find(-clauses[c1][l1]) != unlocked_lit_locs.end()){
+			cout<<"IN1"<<endl;
+			// swap for c1[l1]
+			pair<int,int> p = unlocked_lit_locs[-clauses[c1][l1]];
+			if(locked_clauses.find(p.first) == locked_clauses.end()){
+				cout<<"======"<<endl;
+				print_vector(clauses[c1]);
+				print_vector(clauses[c2]);
+
+				clauses[c1][l1] *= -1;
+				clauses[p.first][p.second] *= -1;
+
+				print_vector(clauses[c1]);
+				print_vector(clauses[c2]);
+				cout<<"======"<<endl;
+
+				// lock the two involved clauses, and the swapper clause
+				locked_clauses.insert(c1);
+				locked_clauses.insert(c2);
+				locked_clauses.insert(p.first);
+				num_flips++;
+				continue;
+			}
+		}
+		if(!locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
+			cout<<"IN2"<<endl;
+
+			// swap for c2[l2]
+			pair<int,int> p = unlocked_lit_locs[-clauses[c1][l1]];
+			if(locked_clauses.find(p.first) == locked_clauses.end()){
+
+				cout<<"======"<<endl;
+				print_vector(clauses[c1]);
+				print_vector(clauses[c2]);
+
+				clauses[c1][l1] *= -1;
+				clauses[p.first][p.second] *= -1;
+
+				print_vector(clauses[c1]);
+				print_vector(clauses[c2]);
+				cout<<"======"<<endl;
+
+				// lock the two involved clauses, and the swapper clause
+				locked_clauses.insert(c1);
+				locked_clauses.insert(c2);
+				locked_clauses.insert(p.first);
+				num_flips++;
+				continue;
+			}
+		}
+
+	}
+	cout<<"FLIP PAIRS: "<<flip_pairs.size()<<endl;
+	cout<<"NUM FLIPS : "<<num_flips<<endl;
+
+
+	/*
+	vector<int> lit_pool;
+
+	for(int i = 0; i < clauses.size(); i++){
+
+		vector<int> c = clauses[i];
+		vector<int> e = enabled[i];
+		vector<int> m = merges[i];
+
+		for(int j = 0; j < e.size(); j++){
+			if(e[j] + m[j] == 0){
+				printf("%10d %10d %10d %10d\n", i, j, e[j], m[j]);
+				for(int k = 0; k < c.size(); k++){
+					lit_pool.push_back(c[k]);
+				}
+			}
+		}
+	}
+	sort(lit_pool.begin(), lit_pool.end(), my_comparator);
+	for(int i = 0; i < lit_pool.size(); i++){
+		cout<<lit_pool[i]<<endl;
+	}
+	*/
+}
+
+
+void dump_clauses(vector< vector<int> >& clauses, int& nVars, char* out_file){
+	ofstream out;
+	out.open(out_file);
+
+	out<<"p cnf "<<nVars<<" "<<clauses.size()<<endl;
+	for(auto c : clauses){
+		for(int l: c){
+			out<<l<<" ";
+		}
+		out<<"0"<<endl;
+	}
+	out.close();
 }
 
 
 int main(int argc, char * argv[]) {
 	vector< vector<int> > clauses;
 	vector<int> cmty;
+	int nVars = 0;
 
 	if(argc < 4){
-		cout << "USAGE: ./merge_generator cnf_file cmty_file out_file" << endl;
+		cout << "USAGE: ./merge_generator cnf_file cmty_file out_cnf_file" << endl;
 		return 1;
 	}
 
@@ -274,30 +450,30 @@ int main(int argc, char * argv[]) {
 	char* cmty_file = argv[2];
 	char* out_file = argv[3];
 
-	read_dimacs(dimacs_file, clauses);
+	read_dimacs(dimacs_file, clauses, nVars);
 	read_cmtys(cmty_file, cmty);
 
 	vector< vector<int> > enabled; // vector to store the number of enabled merges of every individual literal
 	vector< vector<int> > merges; // vector to store the number of actual merges on every individual literal
+	vector< vector<bool> > locked; // if a literal is locked (single enabler/merge), it cannot be flipped
+	// stores ((clause_id, lit_id), (clause_id, lit_id)) pairs which can be flipped,
+	// but must ensure that the 2 involved lits are not locked.
+	vector< pair< pair<int, int>, pair<int, int> > > flip_pairs;
+
 	for(auto c : clauses){
 		vector<int> vec = *(new vector<int>);
 		vector<int> vec2 = *(new vector<int>);
+		vector<bool> vec3 = *(new vector<bool>);
 		growTo(vec, c.size());
 		growTo(vec2, c.size());
+		growTo(vec3, c.size());
 		enabled.push_back(vec);
-		merges.push_back(vec);
+		merges.push_back(vec2);
+		locked.push_back(vec3);
 	}
 
-	compute_enabled_and_merges_on_lits(clauses, enabled, merges);
+	compute_enabled_and_merges_on_lits(clauses, enabled, merges, locked, flip_pairs);
+	dump_clauses(clauses, nVars, out_file);
 
-
-
-	ofstream outFile;
-	outFile.open(out_file);
-
-	long num_merges = 0;
-	long num_resolutions = 0;
-
-	outFile.close();
 	return 0;
 }
