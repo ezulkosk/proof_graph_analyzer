@@ -16,15 +16,14 @@
  * The program takes an input CNF. The clause "skeleton" is "locked", i.e., the set of clauses remain the same,
  * but the polarities of literals can be changed. The number of each literal is also locked, so in order to
  * swap v to !v, !v must be swapped to v elsewhere. This ensures that the community structure and literal popularity
- * distribution of the original instance is maintained.
+ * distribution of the original instance is maintained. It also ensures that if 2 clauses are already merge+res, they
+ * will still be.
  *
- * If a literal is an enabler or a merge, it is also locked. Perhaps this should change if it's a double resolution.
- *
- *
- *
+ * If a literal is an enabler or a merge, it is also locked. If there is a double resolution, one may flip.
  *
  */
 
+#include <ctime>
 #include <assert.h>
 #include <algorithm>
 #include <cstdio>
@@ -198,8 +197,8 @@ void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses, int& nVars){
 
 
 /*
- * increases enabled and merge counters for appropriate literals
- * TODO -- Condition for positive change: the clause has no merges but has a double-res with another clause.
+ * Increases enabled and merge counters for appropriate literals
+ * Condition for positive change: the clause has no merges but has a double-res with another clause.
  * 		   If we flip one literal, it will have a res+merge with that clause.
  */
 bool res_merge_counter(vector<int>& c1, vector<int>& c2,
@@ -255,6 +254,7 @@ bool res_merge_counter(vector<int>& c1, vector<int>& c2,
 		for(int i = 0; i < merge_indices2.size(); i++){
 			m2->at(merge_indices2[i])++;
 			lock2->at(merge_indices2[i]) = true;
+
 		}
 		// print_vector(*m1);
 		updated = true;
@@ -291,6 +291,8 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 			vector<bool> lock2 = locked[j];
 			vector< pair<int, int> > curr_flip_pairs; // does not contain clause_ids. Incorporate those after.
 			bool updated = res_merge_counter(c1, c2, &e1, &e2, &m1, &m2, &lock1, &lock2, curr_flip_pairs);
+
+
 			if(updated){
 				// print_vector(m1);
 				merges[i] = m1;
@@ -325,7 +327,9 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 
 	set<int> locked_clauses;
 
-	// TODO randomize
+	// randomize
+	std::random_shuffle (flip_pairs.begin(), flip_pairs.end());
+
 	int num_flips = 0;
 	for(auto p: flip_pairs){
 		int c1 = p.first.first;
@@ -335,12 +339,14 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		int l2 = p.second.second;
 		int lit2 = clauses[c2][l2];
 
+		vector<int> clause1 = clauses[c1];
+		vector<int> clause2 = clauses[c2];
+
 		// either of the clauses in the pair have been changed
 		if(locked_clauses.find(c1) != locked_clauses.end() || locked_clauses.find(c2) != locked_clauses.end())
 			continue;
 
 		if(!locked[c1][l1] && unlocked_lit_locs.find(-clauses[c1][l1]) != unlocked_lit_locs.end()){
-			cout<<"IN1"<<endl;
 			// swap for c1[l1]
 			pair<int,int> p = unlocked_lit_locs[-clauses[c1][l1]];
 			if(locked_clauses.find(p.first) == locked_clauses.end()){
@@ -363,23 +369,23 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 				continue;
 			}
 		}
-		if(!locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
+		else if(!locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
 			cout<<"IN2"<<endl;
 
 			// swap for c2[l2]
-			pair<int,int> p = unlocked_lit_locs[-clauses[c1][l1]];
+			pair<int,int> p = unlocked_lit_locs[-clauses[c2][l2]];
 			if(locked_clauses.find(p.first) == locked_clauses.end()){
 
-				cout<<"======"<<endl;
-				print_vector(clauses[c1]);
-				print_vector(clauses[c2]);
+				//cout<<"======"<<endl;
+				//print_vector(clauses[c1]);
+				//print_vector(clauses[c2]);
 
-				clauses[c1][l1] *= -1;
+				clauses[c2][l2] *= -1;
 				clauses[p.first][p.second] *= -1;
 
-				print_vector(clauses[c1]);
-				print_vector(clauses[c2]);
-				cout<<"======"<<endl;
+				//print_vector(clauses[c1]);
+				//print_vector(clauses[c2]);
+				//cout<<"======"<<endl;
 
 				// lock the two involved clauses, and the swapper clause
 				locked_clauses.insert(c1);
@@ -393,31 +399,6 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 	}
 	cout<<"FLIP PAIRS: "<<flip_pairs.size()<<endl;
 	cout<<"NUM FLIPS : "<<num_flips<<endl;
-
-
-	/*
-	vector<int> lit_pool;
-
-	for(int i = 0; i < clauses.size(); i++){
-
-		vector<int> c = clauses[i];
-		vector<int> e = enabled[i];
-		vector<int> m = merges[i];
-
-		for(int j = 0; j < e.size(); j++){
-			if(e[j] + m[j] == 0){
-				printf("%10d %10d %10d %10d\n", i, j, e[j], m[j]);
-				for(int k = 0; k < c.size(); k++){
-					lit_pool.push_back(c[k]);
-				}
-			}
-		}
-	}
-	sort(lit_pool.begin(), lit_pool.end(), my_comparator);
-	for(int i = 0; i < lit_pool.size(); i++){
-		cout<<lit_pool[i]<<endl;
-	}
-	*/
 }
 
 
@@ -437,6 +418,9 @@ void dump_clauses(vector< vector<int> >& clauses, int& nVars, char* out_file){
 
 
 int main(int argc, char * argv[]) {
+
+	std::srand ( unsigned ( std::time(0) ) );
+
 	vector< vector<int> > clauses;
 	vector<int> cmty;
 	int nVars = 0;

@@ -29,11 +29,12 @@ using namespace std;
 
 
 
-void print_vector(vector<int>& v){
+void print_vector(vector<int>& v, bool newline=true){
 	for(auto i: v){
 		cout<<i<<" ";
 	}
-	cout<<endl;
+	if(newline)
+		cout<<endl;
 }
 
 void print_vector(vector<double>& v){
@@ -378,6 +379,10 @@ void compute_num_merges2(vector< vector<int> >& clauses,
 					if(ci[ni] == cj[nj]){
 						var_merges[abs(ci[ni])]++;
 						num_merges++;
+						//cout<<"CCC ";
+						//print_vector(ci, false);
+						//cout<<" CCC ";
+						//print_vector(cj);
 						ni++;
 						nj++;
 						for(auto l: ci){
