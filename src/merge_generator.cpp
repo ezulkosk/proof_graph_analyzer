@@ -31,6 +31,8 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <sstream>      // std::stringstream
+
 #include <set>
 #include <utility>
 #include <vector>
@@ -39,6 +41,20 @@
 using namespace std;
 
 
+
+void dump_clauses(vector< vector<int> >& clauses, int& nVars, const char* out_file){
+	ofstream out;
+	out.open(out_file);
+
+	out<<"p cnf "<<nVars<<" "<<clauses.size()<<endl;
+	for(auto c : clauses){
+		for(int l: c){
+			out<<l<<" ";
+		}
+		out<<"0"<<endl;
+	}
+	out.close();
+}
 
 bool my_comparator (int i, int j) {
 	return abs(i) < abs(j) || (abs(i) == abs(j) && i < j);
@@ -277,7 +293,11 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		vector< vector<int> >& enabled,
 		vector< vector<int> >& merges,
 		vector< vector<bool> >& locked,
-		vector< pair< pair<int,int>, pair<int,int> > >& flip_pairs){
+		vector< pair< pair<int,int>, pair<int,int> > >& flip_pairs,
+		int& num_flips,
+		int num_flips_per_dump,
+		int& nVars,
+		char* out_file){
 
 	for(int i = 0; i < (int) clauses.size() - 1; i++){
 		vector<int> c1 = clauses[i];
@@ -330,7 +350,6 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 	// randomize
 	std::random_shuffle (flip_pairs.begin(), flip_pairs.end());
 
-	int num_flips = 0;
 	for(auto p: flip_pairs){
 		int c1 = p.first.first;
 		int l1 = p.first.second;
@@ -350,27 +369,32 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 			// swap for c1[l1]
 			pair<int,int> p = unlocked_lit_locs[-clauses[c1][l1]];
 			if(locked_clauses.find(p.first) == locked_clauses.end()){
-				cout<<"======"<<endl;
-				print_vector(clauses[c1]);
-				print_vector(clauses[c2]);
+				//cout<<"======"<<endl;
+				//print_vector(clauses[c1]);
+				//print_vector(clauses[c2]);
 
 				clauses[c1][l1] *= -1;
 				clauses[p.first][p.second] *= -1;
 
-				print_vector(clauses[c1]);
-				print_vector(clauses[c2]);
-				cout<<"======"<<endl;
+				//print_vector(clauses[c1]);
+				//print_vector(clauses[c2]);
+				//cout<<"======"<<endl;
 
 				// lock the two involved clauses, and the swapper clause
 				locked_clauses.insert(c1);
 				locked_clauses.insert(c2);
 				locked_clauses.insert(p.first);
 				num_flips++;
+				if(num_flips % num_flips_per_dump == 0){
+					stringstream ss;
+					ss << out_file << num_flips;
+					cout<<"Dump: "<<ss.str()<<endl;
+					dump_clauses(clauses, nVars, ss.str().c_str());
+				}
 				continue;
 			}
 		}
 		else if(!locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
-			cout<<"IN2"<<endl;
 
 			// swap for c2[l2]
 			pair<int,int> p = unlocked_lit_locs[-clauses[c2][l2]];
@@ -392,28 +416,17 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 				locked_clauses.insert(c2);
 				locked_clauses.insert(p.first);
 				num_flips++;
+				if(num_flips % num_flips_per_dump == 0){
+					stringstream ss;
+					ss << out_file << num_flips;
+					cout<<"Dump: "<<ss.str()<<endl;
+					dump_clauses(clauses, nVars, ss.str().c_str());
+				}
 				continue;
 			}
 		}
 
 	}
-	cout<<"FLIP PAIRS: "<<flip_pairs.size()<<endl;
-	cout<<"NUM FLIPS : "<<num_flips<<endl;
-}
-
-
-void dump_clauses(vector< vector<int> >& clauses, int& nVars, char* out_file){
-	ofstream out;
-	out.open(out_file);
-
-	out<<"p cnf "<<nVars<<" "<<clauses.size()<<endl;
-	for(auto c : clauses){
-		for(int l: c){
-			out<<l<<" ";
-		}
-		out<<"0"<<endl;
-	}
-	out.close();
 }
 
 
@@ -433,31 +446,42 @@ int main(int argc, char * argv[]) {
 	char* dimacs_file = argv[1];
 	char* cmty_file = argv[2];
 	char* out_file = argv[3];
+	int num_flips_per_dump = atoi(argv[4]);
 
 	read_dimacs(dimacs_file, clauses, nVars);
 	read_cmtys(cmty_file, cmty);
 
-	vector< vector<int> > enabled; // vector to store the number of enabled merges of every individual literal
-	vector< vector<int> > merges; // vector to store the number of actual merges on every individual literal
-	vector< vector<bool> > locked; // if a literal is locked (single enabler/merge), it cannot be flipped
-	// stores ((clause_id, lit_id), (clause_id, lit_id)) pairs which can be flipped,
-	// but must ensure that the 2 involved lits are not locked.
-	vector< pair< pair<int, int>, pair<int, int> > > flip_pairs;
+	int old_num_flips = -1;
+	int num_flips = 0;
+	while(old_num_flips != num_flips){
 
-	for(auto c : clauses){
-		vector<int> vec = *(new vector<int>);
-		vector<int> vec2 = *(new vector<int>);
-		vector<bool> vec3 = *(new vector<bool>);
-		growTo(vec, c.size());
-		growTo(vec2, c.size());
-		growTo(vec3, c.size());
-		enabled.push_back(vec);
-		merges.push_back(vec2);
-		locked.push_back(vec3);
+		vector< vector<int> > enabled; // vector to store the number of enabled merges of every individual literal
+		vector< vector<int> > merges; // vector to store the number of actual merges on every individual literal
+		vector< vector<bool> > locked; // if a literal is locked (single enabler/merge), it cannot be flipped
+		// stores ((clause_id, lit_id), (clause_id, lit_id)) pairs which can be flipped,
+		// but must ensure that the 2 involved lits are not locked.
+		vector< pair< pair<int, int>, pair<int, int> > > flip_pairs;
+
+		for(auto c : clauses){
+			vector<int> vec = *(new vector<int>);
+			vector<int> vec2 = *(new vector<int>);
+			vector<bool> vec3 = *(new vector<bool>);
+			growTo(vec, c.size());
+			growTo(vec2, c.size());
+			growTo(vec3, c.size());
+			enabled.push_back(vec);
+			merges.push_back(vec2);
+			locked.push_back(vec3);
+		}
+		old_num_flips = num_flips;
+		compute_enabled_and_merges_on_lits(clauses, enabled, merges, locked, flip_pairs, num_flips, num_flips_per_dump, nVars, out_file);
+		cout<<"Num Flips: "<<num_flips<<endl;
+		//dump_clauses(clauses, nVars, out_file);
 	}
-
-	compute_enabled_and_merges_on_lits(clauses, enabled, merges, locked, flip_pairs);
-	dump_clauses(clauses, nVars, out_file);
+	stringstream ss;
+	ss << out_file << num_flips;
+	cout<<"Dump: "<<ss.str();
+	dump_clauses(clauses, nVars, ss.str().c_str());
 
 	return 0;
 }
