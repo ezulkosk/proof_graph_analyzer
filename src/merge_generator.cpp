@@ -296,6 +296,7 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		vector< pair< pair<int,int>, pair<int,int> > >& flip_pairs,
 		int& num_flips,
 		int num_flips_per_dump,
+		int max_flips,
 		int& nVars,
 		char* out_file){
 
@@ -425,6 +426,8 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 				continue;
 			}
 		}
+		if(num_flips >= max_flips)
+			break;
 
 	}
 }
@@ -444,16 +447,18 @@ int main(int argc, char * argv[]) {
 	}
 
 	char* dimacs_file = argv[1];
-	char* cmty_file = argv[2];
-	char* out_file = argv[3];
-	int num_flips_per_dump = atoi(argv[4]);
+	//char* cmty_file = argv[2];
+	char* out_file = argv[2];
+	int num_flips_per_dump = atoi(argv[3]);
+	int max_flips = atoi(argv[4]);
+
 
 	read_dimacs(dimacs_file, clauses, nVars);
-	read_cmtys(cmty_file, cmty);
+	//read_cmtys(cmty_file, cmty);
 
 	int old_num_flips = -1;
 	int num_flips = 0;
-	while(old_num_flips != num_flips){
+	while(old_num_flips != num_flips && num_flips < max_flips){
 
 		vector< vector<int> > enabled; // vector to store the number of enabled merges of every individual literal
 		vector< vector<int> > merges; // vector to store the number of actual merges on every individual literal
@@ -474,7 +479,7 @@ int main(int argc, char * argv[]) {
 			locked.push_back(vec3);
 		}
 		old_num_flips = num_flips;
-		compute_enabled_and_merges_on_lits(clauses, enabled, merges, locked, flip_pairs, num_flips, num_flips_per_dump, nVars, out_file);
+		compute_enabled_and_merges_on_lits(clauses, enabled, merges, locked, flip_pairs, num_flips, num_flips_per_dump, max_flips, nVars, out_file);
 		cout<<"Num Flips: "<<num_flips<<endl;
 		//dump_clauses(clauses, nVars, out_file);
 	}
