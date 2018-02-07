@@ -334,14 +334,23 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 	}
 	cout<<endl;
 
-	map<int, pair<int, int> > unlocked_lit_locs;
+	map<int, vector< pair<int, int> > > unlocked_lit_locs;
 	for(int i = 0; i < clauses.size(); i++){
 		vector<int> c = clauses[i];
 		vector<bool> lock = locked[i];
 
 		for(int j = 0; j < c.size(); j++){
 			if(!lock[j]){
-				unlocked_lit_locs[c[j]] = std::make_pair(i, j);
+				// get the current set associated with c[j]
+				vector< pair<int, int> >* v;
+				if(unlocked_lit_locs.find(c[j]) != unlocked_lit_locs.end()){
+					v = &unlocked_lit_locs[c[j]];
+				}
+				else{
+					v = new vector< pair<int, int> >;
+				}
+				v->push_back(std::make_pair(i, j));
+				unlocked_lit_locs[c[j]] = *v;
 			}
 		}
 	}
@@ -366,64 +375,70 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		if(locked_clauses.find(c1) != locked_clauses.end() || locked_clauses.find(c2) != locked_clauses.end())
 			continue;
 
+		bool actual_flip = false;
 		if(!locked[c1][l1] && unlocked_lit_locs.find(-clauses[c1][l1]) != unlocked_lit_locs.end()){
 			// swap for c1[l1]
-			pair<int,int> p = unlocked_lit_locs[-clauses[c1][l1]];
-			if(locked_clauses.find(p.first) == locked_clauses.end()){
-				//cout<<"======"<<endl;
-				//print_vector(clauses[c1]);
-				//print_vector(clauses[c2]);
+			vector< pair<int,int> >* vec = &(unlocked_lit_locs[-clauses[c1][l1]]);
+			for(auto pp : (*vec)){
+				if(locked_clauses.find(pp.first) == locked_clauses.end() && pp.first != c1 && pp.first != c2){
+					//cout<<"======"<<endl;
+					print_vector(clauses[c1]);
+					print_vector(clauses[c2]);
+					print_vector(clauses[pp.first]);
+					clauses[c1][l1] *= -1;
+					clauses[pp.first][pp.second] *= -1;
 
-				clauses[c1][l1] *= -1;
-				clauses[p.first][p.second] *= -1;
+					//print_vector(clauses[c1]);
+					//print_vector(clauses[c2]);
+					//cout<<"======"<<endl;
 
-				//print_vector(clauses[c1]);
-				//print_vector(clauses[c2]);
-				//cout<<"======"<<endl;
-
-				// lock the two involved clauses, and the swapper clause
-				locked_clauses.insert(c1);
-				locked_clauses.insert(c2);
-				locked_clauses.insert(p.first);
-				num_flips++;
-				if(num_flips % num_flips_per_dump == 0){
-					stringstream ss;
-					ss << out_file << num_flips;
-					cout<<"Dump: "<<ss.str()<<endl;
-					dump_clauses(clauses, nVars, ss.str().c_str());
+					// lock the two involved clauses, and the swapper clause
+					locked_clauses.insert(c1);
+					locked_clauses.insert(c2);
+					locked_clauses.insert(pp.first);
+					num_flips++;
+					if(num_flips % num_flips_per_dump == 0){
+						stringstream ss;
+						ss << out_file << num_flips;
+						cout<<"Dump: "<<ss.str()<<endl;
+						dump_clauses(clauses, nVars, ss.str().c_str());
+					}
+					actual_flip = true;
+					break;
 				}
-				continue;
 			}
 		}
-		else if(!locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
+		else if(!actual_flip && !locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
 
 			// swap for c2[l2]
-			pair<int,int> p = unlocked_lit_locs[-clauses[c2][l2]];
-			if(locked_clauses.find(p.first) == locked_clauses.end()){
+			vector< pair<int,int> >* vec = &(unlocked_lit_locs[-clauses[c2][l2]]);
+			for(auto pp : (*vec)){
+				if(locked_clauses.find(pp.first) == locked_clauses.end() && pp.first != c1 && pp.first != c2){
 
-				//cout<<"======"<<endl;
-				//print_vector(clauses[c1]);
-				//print_vector(clauses[c2]);
+					//cout<<"======"<<endl;
+					//print_vector(clauses[c1]);
+					//print_vector(clauses[c2]);
 
-				clauses[c2][l2] *= -1;
-				clauses[p.first][p.second] *= -1;
+					clauses[c2][l2] *= -1;
+					clauses[pp.first][pp.second] *= -1;
 
-				//print_vector(clauses[c1]);
-				//print_vector(clauses[c2]);
-				//cout<<"======"<<endl;
+					//print_vector(clauses[c1]);
+					//print_vector(clauses[c2]);
+					//cout<<"======"<<endl;
 
-				// lock the two involved clauses, and the swapper clause
-				locked_clauses.insert(c1);
-				locked_clauses.insert(c2);
-				locked_clauses.insert(p.first);
-				num_flips++;
-				if(num_flips % num_flips_per_dump == 0){
-					stringstream ss;
-					ss << out_file << num_flips;
-					cout<<"Dump: "<<ss.str()<<endl;
-					dump_clauses(clauses, nVars, ss.str().c_str());
+					// lock the two involved clauses, and the swapper clause
+					locked_clauses.insert(c1);
+					locked_clauses.insert(c2);
+					locked_clauses.insert(pp.first);
+					num_flips++;
+					if(num_flips % num_flips_per_dump == 0){
+						stringstream ss;
+						ss << out_file << num_flips;
+						cout<<"Dump: "<<ss.str()<<endl;
+						dump_clauses(clauses, nVars, ss.str().c_str());
+					}
+					break;
 				}
-				continue;
 			}
 		}
 		if(num_flips >= max_flips)
