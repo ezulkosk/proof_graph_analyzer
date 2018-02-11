@@ -510,11 +510,12 @@ void getProofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& claus
  * @param clauses: stores the literals in each clause starting with ID = 1
  */
 void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& lbd, vector<int>& cmty,
-		vector<int>& proofClauseUses, vector<double>& var_pop, vector<double>& lit_pop, char* clausePropertiesFile){
+		vector<int>& proofClauseUses, vector<double>& var_pop, vector<double>& lit_pop, char* proofAnalysesFile){
 	vector<int> workpool;
 	set<int> seen;
 
-	ofstream clausePropertiesLog;
+	ofstream log;
+	log.open(proofAnalysesFile);
 
 
 	cout<<"Running graph to proof"<<endl;
@@ -584,11 +585,12 @@ void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses
 			clauses[i].clear();
 		}
 	}
-	cout<<"Count: "<<count << "/" <<graph.size()<<endl;
-	cout<<"Deleted: "<<delete_count << "/" <<graph.size()<<endl;
-	cout<<"UselessInput: "<<num_useless_input << "/" <<delete_count<<endl;
-	cout<<"FringeUseless: "<<num_useless_fringe << "/" <<delete_count<<endl;
-	cout<<"CuttableUseless: "<<(delete_count - num_useless_fringe - num_useless_input) << "/" <<delete_count<<endl;
+
+	log<<"Useful: "<<count << " / " <<graph.size()<<endl;
+	log<<"Deleted: "<<delete_count << " / " <<graph.size()<<endl;
+	log<<"UselessInput: "<<num_useless_input << " / " <<delete_count<<endl;
+	log<<"FringeUseless: "<<num_useless_fringe << " / " <<delete_count<<endl;
+	log<<"CuttableUseless: "<<(delete_count - num_useless_fringe - num_useless_input) << " / " <<delete_count<<endl;
 
 
 }
@@ -1023,8 +1025,8 @@ int main(int argc, char * argv[]) {
 	char* graph_file = argv[1];
 	char* cmty_file = argv[2]; // cmtys of the original formula (zero-based)
 	char* proof_analyses_file = argv[3];
-	char* clause_properties_file = argv[4];
-	char* proof_out_file = argv[5];
+	//char* clause_properties_file = argv[4];
+	//char* proof_out_file = argv[5];
 
 	int nOrigVars = 0;
 	int nOrigClauses = 0;
@@ -1051,11 +1053,11 @@ int main(int argc, char * argv[]) {
 
 	//cout<<"after\n";
 
-	graph_to_proof(graph, clauses, lbd, cmty, proofClauseUses, var_pop, lit_pop, clause_properties_file);
+	graph_to_proof(graph, clauses, lbd, cmty, proofClauseUses, var_pop, lit_pop, proof_analyses_file);
 
 	//convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 
-	convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
+	// convert_proof_to_dimacs_format(graph, clauses, proof_out_file, nOrigVars, nProofNodes);
 	getProofClauseUses(graph, clauses, seen, proofClauseUses);
 
 
@@ -1075,15 +1077,14 @@ int main(int argc, char * argv[]) {
 
 	compareInputPopWithProofPop(graph, clauses, var_pop, lit_pop, proofAnalysesFile);
 
+	/*
 	pair<Graph*,Graph*> p = readFormula(proof_out_file, 400);
 	Graph* vig = p.first;
 	double q = fixed_cmty_modularity(vig, n2c);
 	cout<<q<<endl;
 	proofAnalysesFile<<"ProofModularityOriginalPartition,"<<q<<endl;
-
-
 	proofAnalysesFile.close();
-
+	*/
 
 	/*
 	for(auto c : clauses){
