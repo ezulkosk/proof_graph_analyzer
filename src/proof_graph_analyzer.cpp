@@ -1065,8 +1065,8 @@ int main(int argc, char * argv[]) {
 	ofstream proofAnalysesFile;
 	proofAnalysesFile.open(proof_analyses_file);
 
-	analyzeProofLSRPercentiles(graph, clauses, proofAnalysesFile);
-	analyzeProofLSRAvg(graph, clauses, proofAnalysesFile);
+	// 	analyzeProofLSRPercentiles(graph, clauses, proofAnalysesFile);
+	//analyzeProofLSRAvg(graph, clauses, proofAnalysesFile);
 
 	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file, proofAnalysesFile);
 	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proofAnalysesFile);
