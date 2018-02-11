@@ -510,12 +510,10 @@ void getProofClauseUses(vector<vector<int> >& graph, vector<vector<int> >& claus
  * @param clauses: stores the literals in each clause starting with ID = 1
  */
 void graph_to_proof(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& lbd, vector<int>& cmty,
-		vector<int>& proofClauseUses, vector<double>& var_pop, vector<double>& lit_pop, char* proofAnalysesFile){
+		vector<int>& proofClauseUses, vector<double>& var_pop, vector<double>& lit_pop, ofstream& log){
 	vector<int> workpool;
 	set<int> seen;
 
-	ofstream log;
-	log.open(proofAnalysesFile);
 
 
 	cout<<"Running graph to proof"<<endl;
@@ -1053,7 +1051,10 @@ int main(int argc, char * argv[]) {
 
 	//cout<<"after\n";
 
-	graph_to_proof(graph, clauses, lbd, cmty, proofClauseUses, var_pop, lit_pop, proof_analyses_file);
+	ofstream proofAnalysesFile;
+	proofAnalysesFile.open(proof_analyses_file);
+
+	graph_to_proof(graph, clauses, lbd, cmty, proofClauseUses, var_pop, lit_pop, proofAnalysesFile);
 
 	//convert_graph_to_dimacs_format(graph, clauses, graph_cnf_file, nProofNodes, nProofEdges);
 
@@ -1064,8 +1065,7 @@ int main(int argc, char * argv[]) {
 	cout<<"after\n";
 
 
-	ofstream proofAnalysesFile;
-	proofAnalysesFile.open(proof_analyses_file);
+
 
 	// 	analyzeProofLSRPercentiles(graph, clauses, proofAnalysesFile);
 	//analyzeProofLSRAvg(graph, clauses, proofAnalysesFile);
