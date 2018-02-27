@@ -368,6 +368,8 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		int l2 = p.second.second;
 		int lit2 = clauses[c2][l2];
 
+		cout<<"PAIR " << c1 << " " << lit1 << " -- " << c2 << " " << lit2<<endl;
+
 		vector<int> clause1 = clauses[c1];
 		vector<int> clause2 = clauses[c2];
 
@@ -378,8 +380,10 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		bool actual_flip = false;
 		if(!locked[c1][l1] && unlocked_lit_locs.find(-clauses[c1][l1]) != unlocked_lit_locs.end()){
 			// swap for c1[l1]
+			//cout<<"IN\n";
 			vector< pair<int,int> >* vec = &(unlocked_lit_locs[-clauses[c1][l1]]);
 			for(auto pp : (*vec)){
+				//cout<<"PP: "<<pp.first<<endl;
 				if(locked_clauses.find(pp.first) == locked_clauses.end() && pp.first != c1 && pp.first != c2){
 					//cout<<"======"<<endl;
 					print_vector(clauses[c1]);
@@ -408,11 +412,15 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 				}
 			}
 		}
-		else if(!actual_flip && !locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
+		if(!actual_flip && !locked[c2][l2] && unlocked_lit_locs.find(-clauses[c2][l2]) != unlocked_lit_locs.end()){
 
 			// swap for c2[l2]
+			//cout<<"IN2\n";
+
 			vector< pair<int,int> >* vec = &(unlocked_lit_locs[-clauses[c2][l2]]);
 			for(auto pp : (*vec)){
+				//cout<<"PP2: "<<pp.first<<endl;
+
 				if(locked_clauses.find(pp.first) == locked_clauses.end() && pp.first != c1 && pp.first != c2){
 
 					//cout<<"======"<<endl;
