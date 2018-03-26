@@ -182,7 +182,6 @@ void read_dimacs(char* dimacs_file, vector< vector<int> >& clauses){
 
 // checks if resolvable clauses are merges in a cmty-based fashion
 // if 1/n of a clause is in a cmty, count that fraction toward the community, both for clause count and merges
-/*
 void compute_num_merges(vector< vector<int> >& clauses,
 		vector<int>& cmty,
 		vector<double>& cmty_merges,
@@ -204,8 +203,13 @@ void compute_num_merges(vector< vector<int> >& clauses,
 			for(int k = 0; k < cj2.size(); k++)
 				cj2[k] = -cj[cj.size() - 1 - k];
 			while(ni < ci.size() && nj < cj2.size()){
-				if(ci[ni] == cj2[nj]){
+				if(ci[ni] == cj2[nj] && !canResolve){
 					canResolve = true;
+					ni++;
+					nj++;
+				}
+				else if(ci[ni] == cj2[nj] && !canResolve){
+					canResolve = false;
 					break;
 				}
 				else if(ni == ci.size() || nj == cj2.size())
@@ -225,7 +229,6 @@ void compute_num_merges(vector< vector<int> >& clauses,
 			for(auto l: cj){
 				cmty_resolutions[cmty[abs(l)]] += 1 / ((double) cj.size());
 			}
-
 
 			ni = 0;
 			nj = 0;
@@ -253,7 +256,7 @@ void compute_num_merges(vector< vector<int> >& clauses,
 	}
 
 }
-*/
+
 
 void intra_community_merge_res(vector< vector<int> >& clauses,
 		vector<int>& cmty,
@@ -519,8 +522,8 @@ int main(int argc, char * argv[]) {
 	long num_merges = 0;
 	long num_resolutions = 0;
 
-	//compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
-	compute_num_merges2(clauses, cmty, var_inclusion, cmty_merges, cmty_resolutions, var_merges, var_resolutions, num_merges, num_resolutions);
+	compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
+	//compute_num_merges2(clauses, cmty, var_inclusion, cmty_merges, cmty_resolutions, var_merges, var_resolutions, num_merges, num_resolutions);
 
 	intra_community_merge_res(clauses, cmty, cmty_clauses.size(), outFile);
 

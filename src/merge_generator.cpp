@@ -368,7 +368,7 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		int l2 = p.second.second;
 		int lit2 = clauses[c2][l2];
 
-		cout<<"PAIR " << c1 << " " << lit1 << " -- " << c2 << " " << lit2<<endl;
+		// cout<<"PAIR " << c1 << " " << lit1 << " -- " << c2 << " " << lit2<<endl;
 
 		vector<int> clause1 = clauses[c1];
 		vector<int> clause2 = clauses[c2];
@@ -386,9 +386,9 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 				//cout<<"PP: "<<pp.first<<endl;
 				if(locked_clauses.find(pp.first) == locked_clauses.end() && pp.first != c1 && pp.first != c2){
 					//cout<<"======"<<endl;
-					print_vector(clauses[c1]);
-					print_vector(clauses[c2]);
-					print_vector(clauses[pp.first]);
+					//print_vector(clauses[c1]);
+					//print_vector(clauses[c2]);
+					//print_vector(clauses[pp.first]);
 					clauses[c1][l1] *= -1;
 					clauses[pp.first][pp.second] *= -1;
 
@@ -404,7 +404,7 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 					if(num_flips % num_flips_per_dump == 0){
 						stringstream ss;
 						ss << out_file << num_flips;
-						cout<<"Dump: "<<ss.str()<<endl;
+						// cout<<"Dump: "<<ss.str()<<endl;
 						dump_clauses(clauses, nVars, ss.str().c_str());
 					}
 					actual_flip = true;
@@ -442,7 +442,7 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 					if(num_flips % num_flips_per_dump == 0){
 						stringstream ss;
 						ss << out_file << num_flips;
-						cout<<"Dump: "<<ss.str()<<endl;
+						// cout<<"Dump: "<<ss.str()<<endl;
 						dump_clauses(clauses, nVars, ss.str().c_str());
 					}
 					break;
@@ -508,7 +508,7 @@ int main(int argc, char * argv[]) {
 	}
 	stringstream ss;
 	ss << out_file << num_flips;
-	cout<<"Dump: "<<ss.str();
+	// cout<<"Dump: "<<ss.str();
 	dump_clauses(clauses, nVars, ss.str().c_str());
 
 	return 0;
