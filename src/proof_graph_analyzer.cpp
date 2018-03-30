@@ -168,6 +168,7 @@ void read_graph(char* file,
 		vector< vector<int> >& clauses,
 		vector< pair<int, int> >& units,
 		vector<int>& lbd,
+		vector<int>& conflict_merges,
 		int& nOrigVars,
 		int& nOrigClauses){
 	int num;
@@ -178,6 +179,7 @@ void read_graph(char* file,
 	graph.push_back(*final_deps);
 	clauses.push_back(dummy);
 	lbd.push_back(0);
+	conflict_merges.push_back(0);
 
 	cout << file << endl;
 
@@ -205,6 +207,8 @@ void read_graph(char* file,
 			}
 			graph_file >> num;
 			lbd.push_back(num);
+			graph_file >> num;
+			conflict_merges.push_back(num);
 			graph_file >> num;
 			assert(num == 0);
 		}
@@ -771,19 +775,19 @@ void proofSpatialLocality(vector< vector<int> >& clauses,
 
 
 // output the merge locality of the proof clauses
-void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& clauses, ofstream& proofAnalysesFile){
+void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& clauses, vector<int>& conflict_merges, ofstream& proofAnalysesFile){
 	// for each clause in the proof, output how many merges occur between resolvable clauses of its deps
-	int merges = 0;
+	long merges = 0;
 	double mergesNormalizedByNumDeps = 0;
-	int pf_size = 0;
+	long pf_size = 0;
 	long numDeps = 0;
 	for(int i = 0; i < clauses.size(); i++){
-		int curr_merges = 0;
 		vector<int> learnt = clauses[i];
 		vector<int> deps = graph[i];
-		if(learnt.size() == 0 && i != 0)
+		if(learnt.size() == 0 || i == 0) // OLD: && i != 0)
 			continue;
 		pf_size++;
+		/*
 		for(int j = 0; j < ((int)deps.size()) - 1; j++){
 			vector<int> dj = clauses[deps[j]];
 			for(int k = j + 1; k < ((int) deps.size()); k++){
@@ -795,8 +799,12 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 				}
 			}
 		}
+		*/
+		merges += conflict_merges[i];
+
+
 		if(deps.size() > 0){
-			mergesNormalizedByNumDeps += (double) curr_merges / deps.size();
+			mergesNormalizedByNumDeps += (double) conflict_merges[i] / deps.size();
 			numDeps += deps.size();
 		}
 	}
@@ -1007,6 +1015,7 @@ int main(int argc, char * argv[]) {
 	vector< vector<int> > graph; // each index corresponds to a node, each element of graph[i] corresponds to deps[i]
 	vector< vector<int> > proof;
 	vector<int> lbd;
+	vector<int> conflict_merges;
 	vector<int> proofClauseUses; // for each index i, maps how many times clause_i was used to derive another clause
 	vector< vector<int> > clauses;
 	vector<int> clauseUses; // TODO use
@@ -1032,7 +1041,7 @@ int main(int argc, char * argv[]) {
 	int nProofEdges = 0;
 
 
-	read_graph(graph_file, graph, clauses, units, lbd, nOrigVars, nOrigClauses);
+	read_graph(graph_file, graph, clauses, units, lbd, conflict_merges, nOrigVars, nOrigClauses);
 	growTo(var_pop, nOrigVars+1);
 	growTo(lit_pop, (nOrigVars+1) * 2);
 	get_var_and_lit_popularity(graph, clauses, var_pop, lit_pop);
@@ -1073,7 +1082,7 @@ int main(int argc, char * argv[]) {
 	analyzeProofClauseUses(proofClauseUses, clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proof_analyses_file, proofAnalysesFile);
 	proofSpatialLocality(clauses, cmty, cmty_picks, cmty_size, cmty_clauses, proofAnalysesFile);
 
-	proofMergeLocality(graph, clauses, proofAnalysesFile);
+	proofMergeLocality(graph, clauses, conflict_merges, proofAnalysesFile);
 
 	compareInputPopWithProofPop(graph, clauses, var_pop, lit_pop, proofAnalysesFile);
 
