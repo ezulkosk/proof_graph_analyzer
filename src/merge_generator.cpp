@@ -228,7 +228,6 @@ bool res_merge_counter(vector<int>& c1, vector<int>& c2,
 	vector<int> res_indices2;
 	vector<int> merge_indices1;
 	vector<int> merge_indices2;
-
 	int num_merges = 0;
 
 	for(int i = 0; i < c1.size(); i++){
@@ -283,12 +282,68 @@ bool res_merge_counter(vector<int>& c1, vector<int>& c2,
 		}
 		updated = true;
 	}
+
+	return updated;
+}
+
+/*
+ * Decreases enabled and merge counters for appropriate literals
+ *
+ */
+bool inverted_res_merge_counter(vector<int>& c1, vector<int>& c2,
+		vector<bool>* lock1, vector<bool>* lock2,
+		vector< pair<int,int> >& curr_flip_pairs){
+
+	// can assume that a literal will never be both a merge and a res for the same clause pair
+	vector<int> res_indices1;
+	vector<int> res_indices2;
+	vector<int> merge_indices1;
+	vector<int> merge_indices2;
+	//print_vector(c1);
+	//print_vector(c2);
+	int num_merges = 0;
+
+	for(int i = 0; i < c1.size(); i++){
+		int l1 = c1[i];
+		for(int j = 0; j < c2.size(); j++){
+			int l2 = c2[j];
+			if(l1 == l2){
+				num_merges++;
+				merge_indices1.push_back(i);
+				merge_indices2.push_back(j);
+			}
+			else if(l1 == -l2){
+				res_indices1.push_back(i);
+				res_indices2.push_back(j);
+			}
+		}
+	}
+	bool updated = false;
+	if(res_indices1.size() == 2){
+		lock1->at(res_indices1[0]) = true;
+		lock2->at(res_indices2[0]) = true;
+		lock1->at(res_indices1[1]) = true;
+		lock2->at(res_indices2[1]) = true;
+		updated = true;
+	}
+	if(res_indices1.size() == 1 && num_merges > 0){
+		// create flip pairs
+		pair<int, int> p = std::make_pair(res_indices1[0], res_indices2[0]);
+		curr_flip_pairs.push_back(p);
+		for(int i = 0; i < merge_indices1.size(); i++){
+			pair<int, int> p = std::make_pair(merge_indices1[i], merge_indices2[i]);
+			curr_flip_pairs.push_back(p);
+		}
+
+		updated = true;
+	}
+
 	return updated;
 }
 
 
 
-
+// TODO can probably combine enabled/merges/locked into one vector
 void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		vector< vector<int> >& enabled,
 		vector< vector<int> >& merges,
@@ -298,7 +353,8 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		int num_flips_per_dump,
 		int max_flips,
 		int& nVars,
-		char* out_file){
+		char* out_file,
+		bool reduce_merges=false){
 
 	for(int i = 0; i < (int) clauses.size() - 1; i++){
 		vector<int> c1 = clauses[i];
@@ -311,28 +367,50 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 			vector<int> m2 = merges[j];
 			vector<bool> lock2 = locked[j];
 			vector< pair<int, int> > curr_flip_pairs; // does not contain clause_ids. Incorporate those after.
-			bool updated = res_merge_counter(c1, c2, &e1, &e2, &m1, &m2, &lock1, &lock2, curr_flip_pairs);
+
+			bool updated = false;
+			if(reduce_merges){
+				updated = inverted_res_merge_counter(c1, c2, &lock1, &lock2, curr_flip_pairs);
+			}
+			else{
+				updated = res_merge_counter(c1, c2, &e1, &e2, &m1, &m2, &lock1, &lock2, curr_flip_pairs);
+			}
 
 
 			if(updated){
-				// print_vector(m1);
-				merges[i] = m1;
-				merges[j] = m2;
-				enabled[i] = e1;
-				enabled[j] = e2;
-				locked[i] = lock1;
-				locked[j] = lock2;
-				// cout<<"===="<<endl;
-				for(auto p: curr_flip_pairs){
-					pair<int, int> p1 = std::make_pair(i, p.first);
-					pair<int, int> p2 = std::make_pair(j, p.second);
-					pair< pair<int,int>, pair<int,int> > p3 = std::make_pair(p1, p2);
-					flip_pairs.push_back(p3);
+				if(!reduce_merges){
+					// print_vector(m1);
+					merges[i] = m1;
+					merges[j] = m2;
+					enabled[i] = e1;
+					enabled[j] = e2;
+					locked[i] = lock1;
+					locked[j] = lock2;
+					// cout<<"===="<<endl;
+					for(auto p: curr_flip_pairs){
+						pair<int, int> p1 = std::make_pair(i, p.first);
+						pair<int, int> p2 = std::make_pair(j, p.second);
+						pair< pair<int,int>, pair<int,int> > p3 = std::make_pair(p1, p2);
+						flip_pairs.push_back(p3);
+					}
+				}
+				else{
+					// print_vector(m1);
+					locked[i] = lock1;
+					locked[j] = lock2;
+					// cout<<"===="<<endl;
+					for(auto p: curr_flip_pairs){
+						pair<int, int> p1 = std::make_pair(i, p.first);
+						pair<int, int> p2 = std::make_pair(j, p.second);
+						pair< pair<int,int>, pair<int,int> > p3 = std::make_pair(p1, p2);
+						flip_pairs.push_back(p3);
+					}
 				}
 			}
+
 		}
 	}
-	cout<<endl;
+	//cout<<endl;
 
 	map<int, vector< pair<int, int> > > unlocked_lit_locs;
 	for(int i = 0; i < clauses.size(); i++){
@@ -368,7 +446,7 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 		int l2 = p.second.second;
 		int lit2 = clauses[c2][l2];
 
-		// cout<<"PAIR " << c1 << " " << lit1 << " -- " << c2 << " " << lit2<<endl;
+		//cout<<"PAIR " << c1 << " " << lit1 << " -- " << c2 << " " << lit2<<endl;
 
 		vector<int> clause1 = clauses[c1];
 		vector<int> clause2 = clauses[c2];
@@ -445,9 +523,13 @@ void compute_enabled_and_merges_on_lits(vector< vector<int> >& clauses,
 						// cout<<"Dump: "<<ss.str()<<endl;
 						dump_clauses(clauses, nVars, ss.str().c_str());
 					}
+					actual_flip = true;
 					break;
 				}
 			}
+		}
+		if(actual_flip && reduce_merges){
+			break;
 		}
 		if(num_flips >= max_flips)
 			break;
@@ -465,20 +547,26 @@ int main(int argc, char * argv[]) {
 	int nVars = 0;
 
 	if(argc < 4){
-		cout << "USAGE: ./merge_generator cnf_file cmty_file out_cnf_file" << endl;
+		cout << "USAGE: ./merge_generator cnf_file out_cnf_file intermediate_flips max_flips reduce0_increase1" << endl;
 		return 1;
 	}
 
+	bool reduce_merges = false;
 	char* dimacs_file = argv[1];
 	//char* cmty_file = argv[2];
 	char* out_file = argv[2];
 	int num_flips_per_dump = atoi(argv[3]);
 	int max_flips = atoi(argv[4]);
+	int reduce_int = atoi(argv[5]);
+	if(reduce_int == 0){
+		reduce_merges = true;
+	}
+	else
+		reduce_merges = false;
 
 
 	read_dimacs(dimacs_file, clauses, nVars);
 	//read_cmtys(cmty_file, cmty);
-
 	int old_num_flips = -1;
 	int num_flips = 0;
 	while(old_num_flips != num_flips && num_flips < max_flips){
@@ -502,14 +590,19 @@ int main(int argc, char * argv[]) {
 			locked.push_back(vec3);
 		}
 		old_num_flips = num_flips;
-		compute_enabled_and_merges_on_lits(clauses, enabled, merges, locked, flip_pairs, num_flips, num_flips_per_dump, max_flips, nVars, out_file);
+		compute_enabled_and_merges_on_lits(clauses, enabled, merges, locked, flip_pairs, num_flips, num_flips_per_dump, max_flips, nVars, out_file, reduce_merges);
 		cout<<"Num Flips: "<<num_flips<<endl;
 		//dump_clauses(clauses, nVars, out_file);
 	}
-	stringstream ss;
-	ss << out_file << num_flips;
-	// cout<<"Dump: "<<ss.str();
-	dump_clauses(clauses, nVars, ss.str().c_str());
+	if(num_flips > 0){
+		stringstream ss;
+		ss << out_file << num_flips;
+		// cout<<"Dump: "<<ss.str();
+		dump_clauses(clauses, nVars, ss.str().c_str());
+	}
+	else{
+		cout<<"Unable to find any flips"<<endl;
+	}
 
 	return 0;
 }
