@@ -779,6 +779,7 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 	// for each clause in the proof, output how many merges occur between resolvable clauses of its deps
 	long merges = 0;
 	double mergesNormalizedByNumDeps = 0;
+	double mergesNormalizedByNumDepsSquared = 0;
 	long pf_size = 0;
 	long numDeps = 0;
 	for(int i = 0; i < clauses.size(); i++){
@@ -805,6 +806,9 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 
 		if(deps.size() > 0){
 			mergesNormalizedByNumDeps += (double) conflict_merges[i] / deps.size();
+			if(deps.size() > 1)
+				mergesNormalizedByNumDepsSquared += (double) conflict_merges[i] / ((deps.size() * (deps.size()-1))/2);
+
 			numDeps += deps.size();
 		}
 	}
@@ -812,6 +816,7 @@ void proofMergeLocality(vector< vector<int> >& graph, vector< vector<int> >& cla
 	proofAnalysesFile<<"Merges," << merges<<endl;
 	proofAnalysesFile<<"MergeLocalityAverage,"<<((double) merges) / pf_size<<endl;
 	proofAnalysesFile<<"MergeLocalityNormalizedByNumDeps,"<<mergesNormalizedByNumDeps / pf_size<<endl;
+	proofAnalysesFile<<"MergeLocalityNormalizedByNumDepsSquared,"<<mergesNormalizedByNumDepsSquared / pf_size<<endl;
 	proofAnalysesFile<<"AverageDeps,"<<(double)numDeps / pf_size<<endl;
 
 
