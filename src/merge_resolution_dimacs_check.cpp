@@ -187,7 +187,10 @@ void compute_num_merges(vector< vector<int> >& clauses,
 		vector<double>& cmty_merges,
 		vector<double>& cmty_resolutions,
 		long& num_merges,
-		long& num_resolutions){
+		long& num_resolutions,
+		double& weighted_merges,
+		double& weighted_resolutions,
+		long& num_merge_pairs){
 	for(int i = 0; i < clauses.size() - 1; i++){
 		vector<int> ci = clauses[i];
 
@@ -221,6 +224,7 @@ void compute_num_merges(vector< vector<int> >& clauses,
 			}
 			if(!canResolve)
 				continue;
+			weighted_resolutions += ((double) 1) / (ci.size() + cj.size() - 2);
 			num_resolutions++;
 			// add to cmty_resolutions
 			for(auto l: ci){
@@ -232,9 +236,11 @@ void compute_num_merges(vector< vector<int> >& clauses,
 
 			ni = 0;
 			nj = 0;
+			int curr_merges = 0;
 			while(ni < ci.size() && nj < cj.size()){
 				if(ci[ni] == cj[nj]){
 					num_merges++;
+					curr_merges++;
 					ni++;
 					nj++;
 					for(auto l: ci){
@@ -250,6 +256,11 @@ void compute_num_merges(vector< vector<int> >& clauses,
 					ni++;
 				else
 					nj++;
+			}
+			// weighted merges here
+			if(curr_merges > 0){
+				weighted_merges += ((double) 1) / (ci.size() + cj.size() - 2 - curr_merges);
+				num_merge_pairs++;
 			}
 		}
 
@@ -521,8 +532,12 @@ int main(int argc, char * argv[]) {
 
 	long num_merges = 0;
 	long num_resolutions = 0;
+	long num_merge_pairs = 0;
+	double weighted_merges = 0;
+	double weighted_resolutions = 0;
 
-	compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions);
+	compute_num_merges(clauses, cmty, cmty_merges, cmty_resolutions, num_merges, num_resolutions,
+			weighted_merges, weighted_resolutions, num_merge_pairs);
 	//compute_num_merges2(clauses, cmty, var_inclusion, cmty_merges, cmty_resolutions, var_merges, var_resolutions, num_merges, num_resolutions);
 
 	intra_community_merge_res(clauses, cmty, cmty_clauses.size(), outFile);
@@ -535,7 +550,7 @@ int main(int argc, char * argv[]) {
 			highest = abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()));
 			high_var = i;
 		}
-		// cout<<"V "<<i<<" "<<abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()))<<" "<<var_resolutions[i]<<" "<<var_merges[i]<<endl;
+		// cout<<"V "<< i <<" "<<abs(int(var_inclusion[2*i].size()) - int(var_inclusion[2*i+1].size()))<<" "<<var_resolutions[i]<<" "<<var_merges[i]<<endl;
 	}
 	cout<<"Highest "<<high_var<<" "<<highest<<endl;
 
@@ -575,7 +590,11 @@ int main(int argc, char * argv[]) {
 	outFile<<"ClausePairs,"<<clause_pairs<<endl;
 	outFile<<"NumResolutions,"<<num_resolutions<<endl;
 	outFile<<"NumMerges,"<<num_merges<<endl;
+	outFile<<"NumMergePairs,"<<num_merge_pairs<<endl;
 	outFile<<"AvgCmtyMergeOverResolutions,"<<avg_cmty_merge_resolutions<<endl;
+	outFile<<"NormalizedMerges,"<<weighted_merges<<endl;
+	outFile<<"NormalizedResolutions,"<<weighted_resolutions<<endl;
+
 	for(int i = 0; i < cmty_clauses.size(); i++){
 		outFile<<"c,"<<i<<","<<cmty_clauses[i]<<","<<cmty_resolutions[i]<<","<<cmty_merges[i]<<endl;
 	}
